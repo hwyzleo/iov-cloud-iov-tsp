@@ -96,6 +96,12 @@
         WHERE t.id = #{value}
     </delete>
 
+    <!-- 根据ICCID批量删除 -->
+    <delete id="physicalDeletePoByIccid" parameterType="string">
+        DELETE FROM tb_sim_log t
+        WHERE t.iccid = #{iccid}
+    </delete>
+
     <!-- 根据主键获取对应数据 -->
     <select id="selectPoById" parameterType="Long" resultMap="baseResultMap">
         SELECT <include refid="baseColumnList"/>

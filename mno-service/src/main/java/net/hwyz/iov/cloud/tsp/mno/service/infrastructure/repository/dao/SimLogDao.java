@@ -15,4 +15,12 @@ import org.apache.ibatis.annotations.Mapper;
 @Mapper
 public interface SimLogDao extends BaseDao<SimLogPo, Long> {
 
+    /**
+     * 根据ICCID批量删除
+     *
+     * @param iccid ICCID
+     * @return 删除结果
+     */
+    int physicalDeletePoByIccid(String iccid);
+
 }
