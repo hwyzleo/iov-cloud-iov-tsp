@@ -15,14 +15,12 @@
     <version>0.0.1-SNAPSHOT</version>
 
     <properties>
-        <tsp.version>0.0.1-SNAPSHOT</tsp.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>net.hwyz.iov.cloud.iov</groupId>
             <artifactId>iov-tsp-api</artifactId>
-            <version>${tsp.version}</version>
         </dependency>
 
         <!-- 框架: MySQL -->
@@ -35,28 +33,6 @@
         <dependency>
             <groupId>net.hwyz.iov.cloud.framework</groupId>
             <artifactId>framework-redis-starter</artifactId>
-        </dependency>
-
-        <!-- 框架: 安全 -->
-        <dependency>
-            <groupId>net.hwyz.iov.cloud.framework</groupId>
-            <artifactId>framework-security-starter</artifactId>
-        </dependency>
-
-        <!-- 框架: 审计 -->
-        <dependency>
-            <groupId>net.hwyz.iov.cloud.framework</groupId>
-            <artifactId>framework-audit-starter</artifactId>
-        </dependency>
-
-        <!-- 数据库迁移：Flyway -->
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-mysql</artifactId>
         </dependency>
     </dependencies>
 

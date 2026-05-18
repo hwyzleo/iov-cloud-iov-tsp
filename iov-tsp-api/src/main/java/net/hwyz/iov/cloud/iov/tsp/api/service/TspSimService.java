@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
  *
  * @author hwyz_leo
  */
-@FeignClient(contextId = "exSimService", value = ServiceNameConstants.TSP_MNO, path = "/service/sim", fallbackFactory = TspSimServiceFallbackFactory.class)
+@FeignClient(contextId = "tspSimService", value = ServiceNameConstants.IOV_TSP, path = "/api/service/sim/v1", fallbackFactory = TspSimServiceFallbackFactory.class)
 public interface TspSimService {
 
     /**

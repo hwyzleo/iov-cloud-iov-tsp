@@ -1,7 +1,7 @@
 package net.hwyz.iov.cloud.iov.tsp.api.fallback;
 
 import lombok.extern.slf4j.Slf4j;
-import net.hwyz.iov.cloud.iov.tsp.api.vo.VehicleNetworkExService;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.VehicleNetworkVo;
 import net.hwyz.iov.cloud.iov.tsp.api.service.TspVehicleNetworkService;
 import org.springframework.cloud.openfeign.FallbackFactory;
 import org.springframework.stereotype.Component;
@@ -19,7 +19,7 @@ public class TspVehicleNetworkServiceFallbackFactory implements FallbackFactory<
     public TspVehicleNetworkService create(Throwable throwable) {
         return new TspVehicleNetworkService() {
             @Override
-            public void create(VehicleNetworkExService vehicleNetwork) {
+            public void create(VehicleNetworkVo vehicleNetwork) {
                 log.error("通讯运营商服务创建车辆[{}]网联信息调用失败", vehicleNetwork.getVin(), throwable);
             }
         };

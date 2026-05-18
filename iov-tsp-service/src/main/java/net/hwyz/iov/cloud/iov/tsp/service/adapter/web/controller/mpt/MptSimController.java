@@ -11,7 +11,7 @@ import net.hwyz.iov.cloud.framework.security.annotation.RequiresPermissions;
 import net.hwyz.iov.cloud.framework.security.util.SecurityUtils;
 import net.hwyz.iov.cloud.framework.web.controller.BaseController;
 import net.hwyz.iov.cloud.framework.web.util.PageUtil;
-import net.hwyz.iov.cloud.iov.tsp.api.vo.SimMpt;
+import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.vo.SimMpt;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler.SimMptAssembler;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.cmd.SimCmd;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.query.SimQuery;

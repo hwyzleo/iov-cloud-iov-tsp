@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SimExService {
+public class SimVo {
 
     /**
      * 集成电路卡识别码

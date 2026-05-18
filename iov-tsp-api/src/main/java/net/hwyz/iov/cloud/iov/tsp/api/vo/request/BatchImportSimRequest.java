@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import net.hwyz.iov.cloud.iov.tsp.api.vo.SimExService;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.SimVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.MnoType;
 
 import java.util.List;
@@ -32,7 +32,7 @@ public class BatchImportSimRequest {
      * SIM卡列表
      */
     @NotEmpty(message = "SIM卡列表不能为空")
-    private List<SimExService> simList;
+    private List<SimVo> simList;
 
     /**
      * 批次号

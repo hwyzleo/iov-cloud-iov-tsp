@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class VehicleNetworkExService {
+public class VehicleNetworkVo {
 
     /**
      * 车架号

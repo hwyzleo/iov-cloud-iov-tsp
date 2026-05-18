@@ -1,6 +1,6 @@
 package net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler;
 
-import net.hwyz.iov.cloud.iov.tsp.api.vo.SimExService;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.SimVo;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.cmd.SimImportCmd;
 import org.mapstruct.Mapper;
 import org.mapstruct.factory.Mappers;
@@ -12,8 +12,8 @@ public interface SimExServiceAssembler {
 
     SimExServiceAssembler INSTANCE = Mappers.getMapper(SimExServiceAssembler.class);
 
-    SimImportCmd toCmd(SimExService vo);
+    SimImportCmd toCmd(SimVo vo);
 
-    List<SimImportCmd> toCmdList(List<SimExService> voList);
+    List<SimImportCmd> toCmdList(List<SimVo> voList);
 
 }

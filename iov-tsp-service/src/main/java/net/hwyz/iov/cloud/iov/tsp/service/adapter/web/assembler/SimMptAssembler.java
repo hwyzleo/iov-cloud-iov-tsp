@@ -1,6 +1,6 @@
 package net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler;
 
-import net.hwyz.iov.cloud.iov.tsp.api.vo.SimMpt;
+import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.vo.SimMpt;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.cmd.SimCmd;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.query.SimQuery;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.SimResult;

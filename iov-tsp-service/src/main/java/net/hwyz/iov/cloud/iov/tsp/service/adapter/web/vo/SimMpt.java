@@ -1,4 +1,4 @@
-package net.hwyz.iov.cloud.iov.tsp.api.vo;
+package net.hwyz.iov.cloud.iov.tsp.service.adapter.web.vo;
 
 import lombok.*;
 import net.hwyz.iov.cloud.framework.common.bean.BaseRequest;

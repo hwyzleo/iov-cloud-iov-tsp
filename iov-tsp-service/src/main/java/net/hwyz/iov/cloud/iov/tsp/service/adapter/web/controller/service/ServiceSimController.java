@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping(value = "/service/sim")
+@RequestMapping(value = "/api/service/sim/v1")
 public class ServiceSimController {
 
     private final SimAppService simAppService;
