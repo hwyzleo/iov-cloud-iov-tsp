@@ -6,11 +6,6 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.RemoteControl;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.RemoteControlRepository;
 import org.springframework.stereotype.Service;
 
-/**
- * TBOX领域服务接口实现类
- *
- * @author hwyz_leo
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor

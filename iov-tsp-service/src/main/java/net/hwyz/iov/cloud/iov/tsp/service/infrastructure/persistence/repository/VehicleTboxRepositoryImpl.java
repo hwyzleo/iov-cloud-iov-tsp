@@ -1,0 +1,54 @@
+package net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.repository;
+
+import lombok.RequiredArgsConstructor;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleTbox;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.VehicleTboxRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.converter.VehicleTboxConverter;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.VehicleTboxMapper;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.VehicleTboxPo;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+@RequiredArgsConstructor
+public class VehicleTboxRepositoryImpl implements VehicleTboxRepository {
+
+    private final VehicleTboxMapper vehicleTboxMapper;
+    private final VehicleTboxConverter vehicleTboxConverter;
+
+    @Override
+    public VehicleTbox getByVin(String vin) {
+        List<VehicleTboxPo> poList = vehicleTboxMapper.selectPoByExample(
+                VehicleTboxPo.builder().vin(vin).build()
+        );
+        if (poList.isEmpty()) {
+            return null;
+        }
+        return vehicleTboxConverter.toEntity(poList.get(0));
+    }
+
+    @Override
+    public VehicleTbox getByVinAndSn(String vin, String sn) {
+        List<VehicleTboxPo> poList = vehicleTboxMapper.selectPoByExample(
+                VehicleTboxPo.builder().vin(vin).sn(sn).build()
+        );
+        if (poList.isEmpty()) {
+            return null;
+        }
+        return vehicleTboxConverter.toEntity(poList.get(0));
+    }
+
+    @Override
+    public int save(VehicleTbox vehicleTbox) {
+        VehicleTboxPo po = vehicleTboxConverter.toPo(vehicleTbox);
+        return vehicleTboxMapper.insertPo(po);
+    }
+
+    @Override
+    public int update(VehicleTbox vehicleTbox) {
+        VehicleTboxPo po = vehicleTboxConverter.toPo(vehicleTbox);
+        return vehicleTboxMapper.updatePo(po);
+    }
+
+}

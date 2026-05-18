@@ -49,8 +49,8 @@ public class TboxFactory {
                 .params(params)
                 .msgFlow(msgFlow)
                 .msgTime(msgTime)
+                .msgRetry(0)
                 .build();
-        remoteControlDo.init();
         return remoteControlDo;
     }
 
