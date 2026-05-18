@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.Sim;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.SimRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.converter.SimConverter;
-import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.SimDao;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.SimMapper;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.SimPo;
 import org.springframework.stereotype.Repository;
 
@@ -15,42 +15,42 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SimRepositoryImpl implements SimRepository {
 
-    private final SimDao simDao;
+    private final SimMapper simMapper;
     private final SimConverter simConverter;
 
     @Override
     public Sim getById(Long id) {
-        SimPo po = simDao.selectPoById(id);
+        SimPo po = simMapper.selectPoById(id);
         return simConverter.toEntity(po);
     }
 
     @Override
     public Sim getByIccid(String iccid) {
-        SimPo po = simDao.selectByIccid(iccid);
+        SimPo po = simMapper.selectByIccid(iccid);
         return simConverter.toEntity(po);
     }
 
     @Override
     public List<Sim> search(Map<String, Object> conditions) {
-        List<SimPo> poList = simDao.selectPoByMap(conditions);
+        List<SimPo> poList = simMapper.selectPoByMap(conditions);
         return simConverter.toEntityList(poList);
     }
 
     @Override
     public int save(Sim sim) {
         SimPo po = simConverter.toPo(sim);
-        return simDao.insertPo(po);
+        return simMapper.insertPo(po);
     }
 
     @Override
     public int update(Sim sim) {
         SimPo po = simConverter.toPo(sim);
-        return simDao.updatePo(po);
+        return simMapper.updatePo(po);
     }
 
     @Override
     public int deleteByIds(Long[] ids) {
-        return simDao.batchPhysicalDeletePo(ids);
+        return simMapper.batchPhysicalDeletePo(ids);
     }
 
 }

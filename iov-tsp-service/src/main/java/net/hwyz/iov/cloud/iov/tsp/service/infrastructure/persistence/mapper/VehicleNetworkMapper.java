@@ -13,7 +13,7 @@ import org.apache.ibatis.annotations.Mapper;
  * @since 2025-05-12
  */
 @Mapper
-public interface VehicleNetworkDao extends BaseDao<VehicleNetworkPo, Long> {
+public interface VehicleNetworkMapper extends BaseDao<VehicleNetworkPo, Long> {
 
     /**
      * 根据VIN查询车辆网联信息

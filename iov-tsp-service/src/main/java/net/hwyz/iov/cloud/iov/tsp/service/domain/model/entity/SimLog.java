@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import net.hwyz.iov.cloud.iov.tsp.service.domain.enums.SimState;
+import net.hwyz.iov.cloud.iov.tsp.service.common.enums.SimState;
 
 @Data
 @Builder

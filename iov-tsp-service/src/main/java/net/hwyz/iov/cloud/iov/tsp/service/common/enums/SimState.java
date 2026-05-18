@@ -1,4 +1,4 @@
-package net.hwyz.iov.cloud.iov.tsp.service.domain.enums;
+package net.hwyz.iov.cloud.iov.tsp.service.common.enums;
 
 import lombok.AllArgsConstructor;
 

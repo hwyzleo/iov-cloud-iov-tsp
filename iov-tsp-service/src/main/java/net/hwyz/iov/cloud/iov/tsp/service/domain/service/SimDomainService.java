@@ -1,7 +1,7 @@
 package net.hwyz.iov.cloud.iov.tsp.service.domain.service;
 
 import lombok.RequiredArgsConstructor;
-import net.hwyz.iov.cloud.iov.tsp.service.domain.enums.SimState;
+import net.hwyz.iov.cloud.iov.tsp.service.common.enums.SimState;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.Sim;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.SimLog;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.SimLogRepository;

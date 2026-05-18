@@ -13,6 +13,6 @@ import org.apache.ibatis.annotations.Mapper;
  * @since 2025-05-19
  */
 @Mapper
-public interface VehicleNetworkLogDao extends BaseDao<VehicleNetworkLogPo, Long> {
+public interface VehicleNetworkLogMapper extends BaseDao<VehicleNetworkLogPo, Long> {
 
 }

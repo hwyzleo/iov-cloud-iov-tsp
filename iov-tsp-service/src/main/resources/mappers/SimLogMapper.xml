@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.SimLogDao">
+<mapper namespace="net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.SimLogMapper">
 
     <!-- 通用查询映射结果 -->
     <resultMap id="baseResultMap" type="net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.SimLogPo">

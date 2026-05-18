@@ -13,7 +13,7 @@ import org.apache.ibatis.annotations.Mapper;
  * @since 2025-05-13
  */
 @Mapper
-public interface SimLogDao extends BaseDao<SimLogPo, Long> {
+public interface SimLogMapper extends BaseDao<SimLogPo, Long> {
 
     /**
      * 根据ICCID批量删除

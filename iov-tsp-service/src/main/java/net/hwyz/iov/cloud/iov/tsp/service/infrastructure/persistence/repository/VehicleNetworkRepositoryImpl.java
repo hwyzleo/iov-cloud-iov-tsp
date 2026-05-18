@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleNetwork;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.VehicleNetworkRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.converter.VehicleNetworkConverter;
-import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.VehicleNetworkDao;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.VehicleNetworkMapper;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.VehicleNetworkPo;
 import org.springframework.stereotype.Repository;
 
@@ -12,31 +12,31 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class VehicleNetworkRepositoryImpl implements VehicleNetworkRepository {
 
-    private final VehicleNetworkDao vehicleNetworkDao;
+    private final VehicleNetworkMapper vehicleNetworkMapper;
     private final VehicleNetworkConverter vehicleNetworkConverter;
 
     @Override
     public VehicleNetwork getById(Long id) {
-        VehicleNetworkPo po = vehicleNetworkDao.selectPoById(id);
+        VehicleNetworkPo po = vehicleNetworkMapper.selectPoById(id);
         return vehicleNetworkConverter.toEntity(po);
     }
 
     @Override
     public VehicleNetwork getByVin(String vin) {
-        VehicleNetworkPo po = vehicleNetworkDao.selectByVin(vin);
+        VehicleNetworkPo po = vehicleNetworkMapper.selectByVin(vin);
         return vehicleNetworkConverter.toEntity(po);
     }
 
     @Override
     public int save(VehicleNetwork vehicleNetwork) {
         VehicleNetworkPo po = vehicleNetworkConverter.toPo(vehicleNetwork);
-        return vehicleNetworkDao.insertPo(po);
+        return vehicleNetworkMapper.insertPo(po);
     }
 
     @Override
     public int update(VehicleNetwork vehicleNetwork) {
         VehicleNetworkPo po = vehicleNetworkConverter.toPo(vehicleNetwork);
-        return vehicleNetworkDao.updatePo(po);
+        return vehicleNetworkMapper.updatePo(po);
     }
 
 }

@@ -2,9 +2,8 @@ package net.hwyz.iov.cloud.iov.tsp.service.application.assembler;
 
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.cmd.SimCmd;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.cmd.SimImportCmd;
-import net.hwyz.iov.cloud.iov.tsp.service.application.dto.query.SimQuery;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.SimResult;
-import net.hwyz.iov.cloud.iov.tsp.service.domain.enums.SimState;
+import net.hwyz.iov.cloud.iov.tsp.service.common.enums.SimState;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.Sim;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;

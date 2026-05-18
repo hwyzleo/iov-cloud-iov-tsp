@@ -13,7 +13,7 @@ import org.apache.ibatis.annotations.Mapper;
  * @since 2025-05-12
  */
 @Mapper
-public interface SimDao extends BaseDao<SimPo, Long> {
+public interface SimMapper extends BaseDao<SimPo, Long> {
 
     /**
      * 根据ICCID查询SIM卡信息
