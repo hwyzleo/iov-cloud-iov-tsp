@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping(value = "/service/tbox")
+@RequestMapping(value = "/api/service/tbox/v1")
 public class ServiceTboxInfoController {
 
     private final TboxInfoAppService tboxInfoAppService;
