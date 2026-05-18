@@ -1,38 +1,19 @@
 package net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler;
 
 import net.hwyz.iov.cloud.iov.tsp.api.vo.SimExService;
-import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.SimPo;
+import net.hwyz.iov.cloud.iov.tsp.service.application.dto.cmd.SimImportCmd;
 import org.mapstruct.Mapper;
-import org.mapstruct.Mappings;
 import org.mapstruct.factory.Mappers;
 
 import java.util.List;
 
-/**
- * 对外服务SIM卡信息转换类
- *
- * @author hwyz_leo
- */
 @Mapper
 public interface SimExServiceAssembler {
 
     SimExServiceAssembler INSTANCE = Mappers.getMapper(SimExServiceAssembler.class);
 
-    /**
-     * 数据传输对象转数据对象
-     *
-     * @param simExService 数据传输对象
-     * @return 数据对象
-     */
-    @Mappings({})
-    SimPo toPo(SimExService simExService);
+    SimImportCmd toCmd(SimExService vo);
 
-    /**
-     * 数据对象列表转数据传输对象列表
-     *
-     * @param simExServiceList 数据传输对象列表
-     * @return 数据对象列表
-     */
-    List<SimPo> toPoList(List<SimExService> simExServiceList);
+    List<SimImportCmd> toCmdList(List<SimExService> voList);
 
 }
