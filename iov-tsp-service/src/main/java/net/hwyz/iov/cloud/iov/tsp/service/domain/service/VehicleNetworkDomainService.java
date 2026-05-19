@@ -5,7 +5,6 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleNetwork;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleNetworkLog;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.VehicleNetworkLogRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.VehicleNetworkRepository;
-import net.hwyz.iov.cloud.iov.tsp.service.common.exception.VehicleNetworkHasExistException;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -21,12 +20,11 @@ public class VehicleNetworkDomainService {
 
     public void create(VehicleNetwork vehicleNetwork) {
         VehicleNetwork existing = getByVin(vehicleNetwork.getVin());
-        if (existing != null) {
-            throw new VehicleNetworkHasExistException(vehicleNetwork.getVin());
+        if (existing == null) {
+            vehicleNetwork.initDefaultState();
+            vehicleNetworkRepository.save(vehicleNetwork);
+            recordLog(vehicleNetwork, "创建信息");
         }
-        vehicleNetwork.initDefaultState();
-        vehicleNetworkRepository.save(vehicleNetwork);
-        recordLog(vehicleNetwork, "创建信息");
     }
 
     private void recordLog(VehicleNetwork vehicleNetwork, String remark) {
