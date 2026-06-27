@@ -31,6 +31,8 @@ public class Tbox {
 
     private String hsm;
 
+    private Integer deviceStatus;
+
     private String iccid1;
 
     private String iccid2;

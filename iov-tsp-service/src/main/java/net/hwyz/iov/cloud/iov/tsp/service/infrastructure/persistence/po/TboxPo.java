@@ -90,6 +90,12 @@ public class TboxPo extends BasePo {
     private String hsm;
 
     /**
+     * 设备状态: 1-活跃, 2-未激活, 3-暂停, 4-停用
+     */
+    @TableField("device_status")
+    private Integer deviceStatus;
+
+    /**
      * 集成电路卡识别码1
      */
     @TableField("iccid1")
