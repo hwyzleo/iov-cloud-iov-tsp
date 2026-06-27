@@ -1,4 +1,4 @@
-package net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.exception;
+package net.hwyz.iov.cloud.iov.tsp.service.common.exception;
 
 /**
  * HSM-VIN绑定关系未找到异常

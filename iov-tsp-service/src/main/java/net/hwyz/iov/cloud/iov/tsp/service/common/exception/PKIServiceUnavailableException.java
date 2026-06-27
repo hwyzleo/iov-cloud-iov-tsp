@@ -1,4 +1,4 @@
-package net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.exception;
+package net.hwyz.iov.cloud.iov.tsp.service.common.exception;
 
 /**
  * PKI服务不可用异常

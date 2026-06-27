@@ -1,4 +1,4 @@
-package net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.exception;
+package net.hwyz.iov.cloud.iov.tsp.service.common.exception;
 
 /**
  * 设备状态无效异常

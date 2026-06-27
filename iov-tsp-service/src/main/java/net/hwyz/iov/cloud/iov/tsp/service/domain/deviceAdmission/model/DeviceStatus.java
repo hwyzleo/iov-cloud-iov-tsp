@@ -12,14 +12,9 @@ import lombok.Getter;
 @AllArgsConstructor
 public enum DeviceStatus {
 
-    /** 活跃 **/
-    ACTIVE(1, "活跃"),
-    /** 未激活 **/
-    INACTIVE(2, "未激活"),
-    /** 暂停 **/
-    SUSPENDED(3, "暂停"),
-    /** 停用 **/
-    DEACTIVATED(4, "停用");
+    ACTIVE(1, "在役"),
+    RETIRED(2, "报废"),
+    BLOCKED(3, "冻结黑名单");
 
     private final Integer code;
     private final String desc;
