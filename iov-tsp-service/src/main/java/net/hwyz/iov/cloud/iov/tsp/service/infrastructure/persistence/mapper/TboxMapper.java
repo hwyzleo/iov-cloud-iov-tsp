@@ -23,4 +23,12 @@ public interface TboxMapper extends BaseDao<TboxPo, Long> {
      */
     TboxPo selectBySn(String sn);
 
+    /**
+     * 根据HSM查询车联终端信息
+     *
+     * @param hsm 硬件安全模块标识
+     * @return 车联终端信息
+     */
+    TboxPo selectByHsm(String hsm);
+
 }

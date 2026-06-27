@@ -215,6 +215,15 @@
         LIMIT 1
     </select>
 
+    <!-- 根据HSM查询车联终端信息 -->
+    <select id="selectByHsm" parameterType="java.util.Map" resultMap="baseResultMap">
+        SELECT <include refid="baseColumnList"/>
+        FROM tb_tbox t
+        WHERE t.row_valid = 1
+        AND hsm = #{hsm}
+        LIMIT 1
+    </select>
+
     <!-- 根据Map对象统计记录数 -->
     <select id="countPoByMap" parameterType="java.util.Map" resultType="int">
         SELECT COUNT(*)
