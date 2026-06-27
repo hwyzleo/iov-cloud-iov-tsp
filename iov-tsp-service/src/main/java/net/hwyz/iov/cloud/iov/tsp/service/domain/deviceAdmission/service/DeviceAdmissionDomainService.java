@@ -8,7 +8,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceAdm
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceStatus;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.DeviceAdmissionLogRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.DeviceAdmissionRepository;
-import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.external.PKIClient;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.CertificateVerificationRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.CompletableFuture;
@@ -25,7 +25,7 @@ public class DeviceAdmissionDomainService {
 
     private final DeviceAdmissionRepository deviceAdmissionRepository;
     private final DeviceAdmissionLogRepository deviceAdmissionLogRepository;
-    private final PKIClient pkiClient;
+    private final CertificateVerificationRepository certificateVerificationRepository;
 
     /**
      * 执行设备接入鉴权检查
@@ -108,7 +108,7 @@ public class DeviceAdmissionDomainService {
 
     private DeviceAdmission.CheckResult checkPkiRevocation(String hsm) {
         try {
-            boolean isRevoked = pkiClient.checkRevocation(hsm);
+            boolean isRevoked = certificateVerificationRepository.checkRevocation(hsm);
 
             if (isRevoked) {
                 return DeviceAdmission.CheckResult.builder()
