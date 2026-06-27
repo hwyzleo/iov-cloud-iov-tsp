@@ -69,7 +69,7 @@ public class DeviceAdmissionDomainService {
 
         deviceAdmissionLogRepository.save(deviceAdmission);
 
-        logger.info("设备接入鉴权检查完成: hsm={}, vin={}, result={}, reason={}, time={}ms",
+        log.info("设备接入鉴权检查完成: hsm={}, vin={}, result={}, reason={}, time={}ms",
             hsm, vin, admissionResult.getCode(), reason, responseTimeMs);
 
         return deviceAdmission;
@@ -98,7 +98,7 @@ public class DeviceAdmissionDomainService {
                 .message("HSM绑定检查通过")
                 .build();
         } catch (Exception e) {
-            logger.error("HSM绑定检查异常", e);
+            log.error("HSM绑定检查异常", e);
             return DeviceAdmission.CheckResult.builder()
                 .status(CheckStatus.ERROR)
                 .message("HSM绑定检查异常: " + e.getMessage())
@@ -122,7 +122,7 @@ public class DeviceAdmissionDomainService {
                 .message("PKI吊销检查通过")
                 .build();
         } catch (Exception e) {
-            logger.warn("PKI服务不可用，允许接入", e);
+            log.warn("PKI服务不可用，允许接入", e);
             return DeviceAdmission.CheckResult.builder()
                 .status(CheckStatus.PASS)
                 .message("PKI服务不可用，允许接入")
@@ -155,7 +155,7 @@ public class DeviceAdmissionDomainService {
                 .message("设备状态检查通过")
                 .build();
         } catch (Exception e) {
-            logger.error("设备状态检查异常", e);
+            log.error("设备状态检查异常", e);
             return DeviceAdmission.CheckResult.builder()
                 .status(CheckStatus.ERROR)
                 .message("设备状态检查异常: " + e.getMessage())

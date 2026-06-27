@@ -29,7 +29,7 @@ public class DeviceAdmissionLogRepositoryImpl implements DeviceAdmissionLogRepos
             DeviceAdmissionLogPo logPo = deviceAdmissionConverter.toLogPo(deviceAdmission);
             deviceAdmissionLogMapper.insertPo(logPo);
         } catch (Exception e) {
-            logger.error("保存设备接入鉴权日志失败", e);
+            log.error("保存设备接入鉴权日志失败", e);
         }
     }
 }

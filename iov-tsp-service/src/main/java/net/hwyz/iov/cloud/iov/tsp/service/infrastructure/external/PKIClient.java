@@ -50,10 +50,10 @@ public class PKIClient implements CertificateVerificationRepository {
 
             return Boolean.TRUE.equals(response);
         } catch (WebClientRequestException e) {
-            logger.warn("PKI服务请求异常: {}", e.getMessage());
+            log.warn("PKI服务请求异常: {}", e.getMessage());
             throw new PKIServiceUnavailableException("PKI服务不可用");
         } catch (Exception e) {
-            logger.warn("PKI服务调用失败: {}", e.getMessage());
+            log.warn("PKI服务调用失败: {}", e.getMessage());
             throw new PKIServiceUnavailableException("PKI服务调用失败");
         }
     }
