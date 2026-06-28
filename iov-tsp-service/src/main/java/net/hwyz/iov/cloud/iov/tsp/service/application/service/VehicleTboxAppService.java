@@ -3,12 +3,10 @@ package net.hwyz.iov.cloud.iov.tsp.service.application.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.hwyz.iov.cloud.iov.tsp.service.application.assembler.VehicleTboxAssembler;
-import net.hwyz.iov.cloud.iov.tsp.service.application.dto.cmd.VehicleTboxBindCmd;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.VehicleTboxResult;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleTbox;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.service.VehicleTboxDomainService;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -21,10 +19,4 @@ public class VehicleTboxAppService {
         VehicleTbox vehicleTbox = vehicleTboxDomainService.get(vin, sn);
         return VehicleTboxAssembler.INSTANCE.toResult(vehicleTbox);
     }
-
-    @Transactional(rollbackFor = Exception.class)
-    public void bind(VehicleTboxBindCmd cmd) {
-        vehicleTboxDomainService.bind(cmd.getVin(), cmd.getSn());
-    }
-
 }

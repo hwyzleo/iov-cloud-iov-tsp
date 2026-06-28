@@ -14,9 +14,14 @@ import java.time.Instant;
 public class VehicleTboxResult {
 
     private String vin;
-
     private String sn;
-
+    private Long bindingId;
+    private String partCode;
+    private String vehicleNodeCode;
+    private String deviceCategory;
+    private String bindState;
+    private Long bindingVersion;
+    private Instant lastEventTime;
+    private String source;
     private Instant createTime;
-
 }
