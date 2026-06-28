@@ -148,4 +148,50 @@
         WHERE t.row_valid = 1
         <!-- 添加自定义条件 -->
     </select>
+
+    <!-- 根据 binding_id 幂等 upsert -->
+    <insert id="upsertByBindingId" parameterType="net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.VehicleTboxPo">
+        INSERT INTO tb_vehicle_tbox (
+            vin, sn, binding_id, part_code, vehicle_node_code,
+            device_category, bind_state, binding_version, last_event_time, source,
+            description, create_time, create_by, modify_time, modify_by, row_version, row_valid
+        ) VALUES (
+            #{vin}, #{sn}, #{bindingId}, #{partCode}, #{vehicleNodeCode},
+            #{deviceCategory}, #{bindState}, #{bindingVersion}, #{lastEventTime}, #{source},
+            #{description}, now(), #{createBy}, now(), #{modifyBy}, 1, 1
+        )
+        ON DUPLICATE KEY UPDATE
+            vin = VALUES(vin),
+            sn = VALUES(sn),
+            part_code = VALUES(part_code),
+            vehicle_node_code = VALUES(vehicle_node_code),
+            device_category = VALUES(device_category),
+            bind_state = VALUES(bind_state),
+            binding_version = VALUES(binding_version),
+            last_event_time = VALUES(last_event_time),
+            source = VALUES(source),
+            modify_time = now(),
+            modify_by = VALUES(modify_by),
+            row_version = row_version + 1
+    </insert>
+
+    <!-- 根据 binding_id 查询 -->
+    <select id="selectByBindingId" parameterType="Long" resultMap="baseResultMap">
+        SELECT <include refid="baseColumnList"/>,
+               binding_id, part_code, vehicle_node_code, device_category,
+               bind_state, binding_version, last_event_time, source
+        FROM tb_vehicle_tbox
+        WHERE binding_id = #{value}
+        AND row_valid = 1
+    </select>
+
+    <!-- 获取所有活跃绑定 -->
+    <select id="selectAllActiveBindings" resultMap="baseResultMap">
+        SELECT <include refid="baseColumnList"/>,
+               binding_id, part_code, vehicle_node_code, device_category,
+               bind_state, binding_version, last_event_time, source
+        FROM tb_vehicle_tbox
+        WHERE bind_state = 'ACTIVE'
+        AND row_valid = 1
+    </select>
 </mapper>
