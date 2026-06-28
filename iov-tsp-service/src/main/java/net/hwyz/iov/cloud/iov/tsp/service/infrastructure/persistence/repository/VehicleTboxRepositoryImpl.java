@@ -51,4 +51,22 @@ public class VehicleTboxRepositoryImpl implements VehicleTboxRepository {
         return vehicleTboxMapper.updatePo(po);
     }
 
+    @Override
+    public int upsertByBindingId(VehicleTbox vehicleTbox) {
+        VehicleTboxPo po = vehicleTboxConverter.toPo(vehicleTbox);
+        return vehicleTboxMapper.upsertByBindingId(po);
+    }
+
+    @Override
+    public VehicleTbox getByBindingId(Long bindingId) {
+        VehicleTboxPo po = vehicleTboxMapper.selectByBindingId(bindingId);
+        return po != null ? vehicleTboxConverter.toEntity(po) : null;
+    }
+
+    @Override
+    public List<VehicleTbox> getAllActiveBindings() {
+        List<VehicleTboxPo> poList = vehicleTboxMapper.selectAllActiveBindings();
+        return vehicleTboxConverter.toEntityList(poList);
+    }
+
 }

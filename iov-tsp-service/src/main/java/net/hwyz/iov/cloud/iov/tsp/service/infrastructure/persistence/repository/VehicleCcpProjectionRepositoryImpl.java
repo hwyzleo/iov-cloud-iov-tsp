@@ -65,7 +65,7 @@ public class VehicleCcpProjectionRepositoryImpl implements VehicleCcpProjectionR
             .description(entity.getDescription())
             .createBy(entity.getCreateBy())
             .modifyBy(entity.getModifyBy())
-            .createTime(entity.getCreateTime())
+            .createTime(entity.getCreateTime() != null ? java.util.Date.from(entity.getCreateTime()) : null)
             .build();
     }
 
@@ -85,7 +85,7 @@ public class VehicleCcpProjectionRepositoryImpl implements VehicleCcpProjectionR
             .description(po.getDescription())
             .createBy(po.getCreateBy())
             .modifyBy(po.getModifyBy())
-            .createTime(po.getCreateTime())
+            .createTime(po.getCreateTime() != null ? po.getCreateTime().toInstant() : null)
             .build();
     }
 }
