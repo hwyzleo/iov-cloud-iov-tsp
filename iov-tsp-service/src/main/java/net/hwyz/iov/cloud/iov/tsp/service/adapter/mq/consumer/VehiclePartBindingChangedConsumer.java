@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.VehicleBindingProjectionAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehiclePartBindingChangedEvent;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
@@ -35,7 +36,9 @@ public class VehiclePartBindingChangedConsumer {
 
     @PostConstruct
     public void consume() {
-        ReceiverOptions<byte[], byte[]> options = ReceiverOptions.create(properties.buildConsumerProperties());
+        ReceiverOptions<String, String> options = ReceiverOptions.<String, String>create(properties.buildConsumerProperties())
+                .withKeyDeserializer(new StringDeserializer())
+                .withValueDeserializer(new StringDeserializer());
         options = options.subscription(Collections.singleton(TOPIC_VMD_VEHICLE_BINDING_CHANGED));
         log.info("开始监听VMD车辆绑定变更事件消息");
         new ReactiveKafkaConsumerTemplate<>(options)
@@ -43,8 +46,8 @@ public class VehiclePartBindingChangedConsumer {
                 .flatMap(record -> {
                     String vin = null;
                     try {
-                        vin = new String(record.key());
-                        String eventJson = new String(record.value());
+                        vin = record.key();
+                        String eventJson = record.value();
                         if (vin != null && !vin.isEmpty()) {
                             log.debug("收到车辆[{}]绑定变更事件[{}]", vin, eventJson);
                             JSONObject event = JSONUtil.parseObj(eventJson);
