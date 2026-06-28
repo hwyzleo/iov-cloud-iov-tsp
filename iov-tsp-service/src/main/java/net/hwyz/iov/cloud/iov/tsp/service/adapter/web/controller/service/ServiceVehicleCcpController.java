@@ -7,7 +7,6 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.VehicleCcpVo;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler.VehicleCcpExServiceAssembler;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.VehicleCcpAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.common.exception.CcpBaseException;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -37,17 +36,6 @@ public class ServiceVehicleCcpController {
             throw new CcpBaseException("车架号与序列号不能都为空");
         }
         return VehicleCcpExServiceAssembler.INSTANCE.fromPo(vehicleCcpAppService.get(vin, sn));
-    }
-
-    /**
-     * 车辆绑定中央计算平台
-     *
-     * @param vehicleCcp 车辆中央计算平台
-     */
-    @PostMapping("/bind")
-    public void bind(@RequestBody @Validated VehicleCcpVo vehicleCcp) {
-        log.info("车辆[{}]绑定中央计算平台[{}]", vehicleCcp.getVin(), vehicleCcp.getSn());
-        vehicleCcpAppService.bind(vehicleCcp.getVin(), vehicleCcp.getSn());
     }
 
 }

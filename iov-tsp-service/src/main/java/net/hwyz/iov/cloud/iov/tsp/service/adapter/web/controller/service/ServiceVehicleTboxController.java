@@ -8,7 +8,6 @@ import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler.VehicleTboxVoAss
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.VehicleTboxResult;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.VehicleTboxAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.common.exception.TboxBaseException;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -27,12 +26,6 @@ public class ServiceVehicleTboxController {
         }
         VehicleTboxResult result = vehicleTboxAppService.get(vin, sn);
         return VehicleTboxVoAssembler.INSTANCE.toVo(result);
-    }
-
-    @PostMapping("/bind")
-    public void bind(@RequestBody @Validated VehicleTboxVo vehicleTbox) {
-        log.info("绑定车辆[{}]车联终端[{}]", vehicleTbox.getVin(), vehicleTbox.getSn());
-        vehicleTboxAppService.bind(VehicleTboxVoAssembler.INSTANCE.toBindCmd(vehicleTbox));
     }
 
 }
