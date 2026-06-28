@@ -8,9 +8,6 @@ import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.TboxPo;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.VehicleTboxPo;
 import org.springframework.stereotype.Repository;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -36,11 +33,10 @@ public class DeviceAdmissionRepositoryImpl implements DeviceAdmissionRepository 
 
         String vin = null;
         if (tboxPo.getSn() != null) {
-            Map<String, Object> params = new HashMap<>();
-            params.put("sn", tboxPo.getSn());
-            List<VehicleTboxPo> vehicleTboxList = vehicleTboxMapper.selectPoByMap(params);
-            if (vehicleTboxList != null && !vehicleTboxList.isEmpty()) {
-                vin = vehicleTboxList.get(0).getVin();
+            // 改读投影表，查询活跃绑定
+            VehicleTboxPo vehicleTboxPo = vehicleTboxMapper.selectBySnAndBindState(tboxPo.getSn(), "ACTIVE");
+            if (vehicleTboxPo != null) {
+                vin = vehicleTboxPo.getVin();
             }
         }
 

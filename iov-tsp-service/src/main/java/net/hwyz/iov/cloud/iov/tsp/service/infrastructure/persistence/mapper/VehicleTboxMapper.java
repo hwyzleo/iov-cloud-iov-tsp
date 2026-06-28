@@ -3,6 +3,7 @@ package net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper;
 import net.hwyz.iov.cloud.framework.mysql.dao.BaseDao;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.VehicleTboxPo;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -31,4 +32,9 @@ public interface VehicleTboxMapper extends BaseDao<VehicleTboxPo, Long> {
      * 获取所有活跃绑定
      */
     List<VehicleTboxPo> selectAllActiveBindings();
+
+    /**
+     * 根据SN和绑定状态查询
+     */
+    VehicleTboxPo selectBySnAndBindState(@Param("sn") String sn, @Param("bindState") String bindState);
 }
