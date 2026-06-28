@@ -36,5 +36,6 @@ public class DeviceAdmission {
     public static class CheckResult {
         private CheckStatus status;
         private String message;
+        private String vin;
     }
 }

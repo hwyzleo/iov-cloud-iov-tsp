@@ -132,7 +132,12 @@
         SELECT <include refid="baseColumnList"/>
         FROM tb_vehicle_tbox t
         WHERE t.row_valid = 1
-        <!-- 添加自定义条件 -->
+        <if test="sn != null and sn != ''">
+            AND t.sn = #{sn}
+        </if>
+        <if test="vin != null and vin != ''">
+            AND t.vin = #{vin}
+        </if>
         ORDER BY t.id DESC
     </select>
 

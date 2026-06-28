@@ -1,7 +1,7 @@
 package net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler;
 
-import net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.vo.DeviceAdmissionCheckVo;
-import net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.vo.DeviceAdmissionResultVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionCheckVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionResultVo;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.cmd.DeviceAdmissionCheckCmd;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.DeviceAdmissionCheckResult;
 import org.mapstruct.Mapper;

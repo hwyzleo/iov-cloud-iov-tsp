@@ -1,9 +1,9 @@
-package net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission;
+package net.hwyz.iov.cloud.iov.tsp.api.service;
 
 import net.hwyz.iov.cloud.framework.common.constant.ServiceNameConstants;
-import net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.vo.DeviceAdmissionCheckVo;
-import net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.vo.DeviceAdmissionResultVo;
-import net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.fallback.TspDeviceAdmissionServiceFallbackFactory;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionCheckVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionResultVo;
+import net.hwyz.iov.cloud.iov.tsp.api.fallback.TspDeviceAdmissionServiceFallbackFactory;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

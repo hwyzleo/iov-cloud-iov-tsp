@@ -8,7 +8,9 @@ import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.TboxPo;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.VehicleTboxPo;
 import org.springframework.stereotype.Repository;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -34,9 +36,9 @@ public class DeviceAdmissionRepositoryImpl implements DeviceAdmissionRepository 
 
         String vin = null;
         if (tboxPo.getSn() != null) {
-            VehicleTboxPo queryPo = new VehicleTboxPo();
-            queryPo.setSn(tboxPo.getSn());
-            List<VehicleTboxPo> vehicleTboxList = vehicleTboxMapper.selectPoByExample(queryPo);
+            Map<String, Object> params = new HashMap<>();
+            params.put("sn", tboxPo.getSn());
+            List<VehicleTboxPo> vehicleTboxList = vehicleTboxMapper.selectPoByMap(params);
             if (vehicleTboxList != null && !vehicleTboxList.isEmpty()) {
                 vin = vehicleTboxList.get(0).getVin();
             }

@@ -1,4 +1,4 @@
-package net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.vo;
+package net.hwyz.iov.cloud.iov.tsp.api.vo;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,6 +17,7 @@ import lombok.NoArgsConstructor;
 public class DeviceAdmissionResultVo {
 
     private String admission;
+    private String vin;
     private String reason;
     private CheckDetails checkDetails;
 

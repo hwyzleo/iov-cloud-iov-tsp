@@ -1,9 +1,9 @@
-package net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.fallback;
+package net.hwyz.iov.cloud.iov.tsp.api.fallback;
 
 import lombok.extern.slf4j.Slf4j;
-import net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.TspDeviceAdmissionService;
-import net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.vo.DeviceAdmissionCheckVo;
-import net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.vo.DeviceAdmissionResultVo;
+import net.hwyz.iov.cloud.iov.tsp.api.service.TspDeviceAdmissionService;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionCheckVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionResultVo;
 import org.springframework.cloud.openfeign.FallbackFactory;
 import org.springframework.stereotype.Component;
 
@@ -21,7 +21,7 @@ public class TspDeviceAdmissionServiceFallbackFactory implements FallbackFactory
         return new TspDeviceAdmissionService() {
             @Override
             public DeviceAdmissionResultVo checkDeviceAdmission(DeviceAdmissionCheckVo checkVo) {
-                log.error("设备接入鉴权检查调用失败: hsm={}, vin={}", checkVo.getHsm(), checkVo.getVin(), cause);
+                log.error("设备接入鉴权检查调用失败: hsm={}", checkVo.getHsm(), cause);
                 DeviceAdmissionResultVo result = new DeviceAdmissionResultVo();
                 result.setAdmission("DENY");
                 result.setReason("服务不可用: " + cause.getMessage());

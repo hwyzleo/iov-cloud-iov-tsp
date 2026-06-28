@@ -20,6 +20,9 @@ public enum DeviceStatus {
     private final String desc;
 
     public static DeviceStatus fromCode(Integer code) {
+        if (code == null) {
+            return null;
+        }
         for (DeviceStatus status : values()) {
             if (status.getCode().equals(code)) {
                 return status;

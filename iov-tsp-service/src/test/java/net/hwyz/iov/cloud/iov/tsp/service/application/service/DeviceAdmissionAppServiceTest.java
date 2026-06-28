@@ -26,7 +26,6 @@ class DeviceAdmissionAppServiceTest {
     void checkAdmission_ShouldReturnResult() {
         DeviceAdmissionCheckCmd cmd = DeviceAdmissionCheckCmd.builder()
             .hsm("test-hsm-123")
-            .vin("test-vin-456")
             .build();
 
         DeviceAdmission deviceAdmission = DeviceAdmission.builder()
@@ -40,7 +39,7 @@ class DeviceAdmissionAppServiceTest {
             .responseTimeMs(50L)
             .build();
 
-        when(deviceAdmissionDomainService.checkAdmission("test-hsm-123", "test-vin-456"))
+        when(deviceAdmissionDomainService.checkAdmission("test-hsm-123"))
             .thenReturn(deviceAdmission);
 
         DeviceAdmissionCheckResult result = deviceAdmissionAppService.checkAdmission(cmd);

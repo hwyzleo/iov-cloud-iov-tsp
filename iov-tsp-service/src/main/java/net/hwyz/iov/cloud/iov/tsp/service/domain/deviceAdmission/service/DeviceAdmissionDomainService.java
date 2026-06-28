@@ -30,14 +30,13 @@ public class DeviceAdmissionDomainService {
     /**
      * 执行设备接入鉴权检查
      * @param hsm 设备HSM标识
-     * @param vin 车辆VIN
      * @return 设备接入鉴权结果
      */
-    public DeviceAdmission checkAdmission(String hsm, String vin) {
+    public DeviceAdmission checkAdmission(String hsm) {
         long startTime = System.currentTimeMillis();
 
         CompletableFuture<DeviceAdmission.CheckResult> hsmCheckFuture =
-            CompletableFuture.supplyAsync(() -> checkHsmBinding(hsm, vin));
+            CompletableFuture.supplyAsync(() -> checkHsmBinding(hsm));
 
         CompletableFuture<DeviceAdmission.CheckResult> pkiCheckFuture =
             CompletableFuture.supplyAsync(() -> checkPkiRevocation(hsm));
@@ -53,6 +52,12 @@ public class DeviceAdmissionDomainService {
 
         DeviceAdmissionResult admissionResult = aggregateResults(hsmCheckResult, pkiCheckResult, deviceStatusCheckResult);
         String reason = generateReason(admissionResult, hsmCheckResult, pkiCheckResult, deviceStatusCheckResult);
+
+        // 从HSM绑定检查结果中获取解析的VIN，如果为null则使用UNKNOWN
+        String vin = hsmCheckResult.getVin();
+        if (vin == null || vin.isEmpty()) {
+            vin = "UNKNOWN";
+        }
 
         long responseTimeMs = System.currentTimeMillis() - startTime;
 
@@ -75,7 +80,7 @@ public class DeviceAdmissionDomainService {
         return deviceAdmission;
     }
 
-    private DeviceAdmission.CheckResult checkHsmBinding(String hsm, String vin) {
+    private DeviceAdmission.CheckResult checkHsmBinding(String hsm) {
         try {
             var tboxInfo = deviceAdmissionRepository.findByHsm(hsm);
 
@@ -86,16 +91,18 @@ public class DeviceAdmissionDomainService {
                     .build();
             }
 
-            if (!tboxInfo.get().vin().equals(vin)) {
+            String vin = tboxInfo.get().vin();
+            if (vin == null || vin.isEmpty()) {
                 return DeviceAdmission.CheckResult.builder()
                     .status(CheckStatus.FAIL)
-                    .message("HSM与VIN不匹配")
+                    .message("HSM未绑定VIN")
                     .build();
             }
 
             return DeviceAdmission.CheckResult.builder()
                 .status(CheckStatus.PASS)
                 .message("HSM绑定检查通过")
+                .vin(vin)
                 .build();
         } catch (Exception e) {
             log.error("HSM绑定检查异常", e);
@@ -141,7 +148,15 @@ public class DeviceAdmissionDomainService {
                     .build();
             }
 
-            DeviceStatus status = DeviceStatus.fromCode(tboxInfo.get().deviceStatus());
+            Integer deviceStatusCode = tboxInfo.get().deviceStatus();
+            if (deviceStatusCode == null) {
+                return DeviceAdmission.CheckResult.builder()
+                    .status(CheckStatus.FAIL)
+                    .message("设备状态未设置")
+                    .build();
+            }
+
+            DeviceStatus status = DeviceStatus.fromCode(deviceStatusCode);
 
             if (status != DeviceStatus.ACTIVE) {
                 return DeviceAdmission.CheckResult.builder()

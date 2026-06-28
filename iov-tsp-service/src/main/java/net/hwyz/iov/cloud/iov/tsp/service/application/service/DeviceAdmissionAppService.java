@@ -25,10 +25,10 @@ public class DeviceAdmissionAppService {
      * @return 检查结果
      */
     public DeviceAdmissionCheckResult checkAdmission(DeviceAdmissionCheckCmd cmd) {
-        log.info("执行设备接入鉴权检查: hsm={}, vin={}", cmd.getHsm(), cmd.getVin());
+        log.info("执行设备接入鉴权检查: hsm={}", cmd.getHsm());
 
         DeviceAdmission deviceAdmission = deviceAdmissionDomainService.checkAdmission(
-            cmd.getHsm(), cmd.getVin());
+            cmd.getHsm());
 
         return DeviceAdmissionAssembler.INSTANCE.toResult(deviceAdmission);
     }

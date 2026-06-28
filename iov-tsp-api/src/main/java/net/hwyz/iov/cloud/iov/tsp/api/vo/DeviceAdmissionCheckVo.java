@@ -1,4 +1,4 @@
-package net.hwyz.iov.cloud.iov.tsp.api.service.deviceAdmission.vo;
+package net.hwyz.iov.cloud.iov.tsp.api.vo;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,6 +21,13 @@ public class DeviceAdmissionCheckVo {
     @NotBlank(message = "设备HSM标识不能为空")
     private String hsm;
 
-    @NotBlank(message = "车辆VIN不能为空")
-    private String vin;
+    private String certSerial;
+
+    private String certFingerprint;
+
+    private String clientId;
+
+    private String sourceIp;
+
+    private Long ts;
 }

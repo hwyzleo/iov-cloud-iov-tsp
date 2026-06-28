@@ -21,6 +21,7 @@
         <result column="hardware_no" property="hardwareNo" />
         <result column="software_no" property="softwareNo" />
         <result column="hsm" property="hsm" />
+        <result column="device_status" property="deviceStatus" />
         <result column="iccid1" property="iccid1" />
         <result column="iccid2" property="iccid2" />
         <result column="imei" property="imei" />
@@ -28,18 +29,18 @@
 
     <!-- 通用查询结果列 -->
     <sql id="baseColumnList">
-        id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, iccid1, iccid2, imei, 
+        id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, device_status, iccid1, iccid2, imei, 
         description, create_time, create_by, modify_time, modify_by, row_version, row_valid
     </sql>
 
     <!-- 插入 -->
     <insert id="insertPo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO tb_tbox (
-            id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, iccid1, iccid2, imei, 
+            id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, device_status, iccid1, iccid2, imei, 
             description, create_time, create_by, modify_time, modify_by, row_version, row_valid
         )
         VALUES (
-            #{id}, #{sn}, #{no}, #{configWord}, #{supplierCode}, #{hardwareVer}, #{softwareVer}, #{hardwareNo}, #{softwareNo}, #{hsm}, #{iccid1}, #{iccid2}, #{imei}, 
+            #{id}, #{sn}, #{no}, #{configWord}, #{supplierCode}, #{hardwareVer}, #{softwareVer}, #{hardwareNo}, #{softwareNo}, #{hsm}, #{deviceStatus}, #{iccid1}, #{iccid2}, #{imei}, 
             #{description}, now(), #{createBy}, now(), #{modifyBy}, 1, 1
         )
     </insert>
@@ -47,13 +48,13 @@
     <!-- 批量插入 -->
     <insert id="batchInsertPo" useGeneratedKeys="true" keyProperty="id" parameterType="java.util.List">
         INSERT INTO tb_tbox (
-            id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, iccid1, iccid2, imei, 
+            id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, device_status, iccid1, iccid2, imei, 
             description, create_time, create_by, modify_time, modify_by, row_version, row_valid
         )
         VALUES
         <foreach collection="list" item="item" index="index" separator=",">
         (
-            #{item.id}, #{item.sn}, #{item.no}, #{item.configWord}, #{item.supplierCode}, #{item.hardwareVer}, #{item.softwareVer}, #{item.hardwareNo}, #{item.softwareNo}, #{item.hsm}, #{item.iccid1}, #{item.iccid2}, #{item.imei}, 
+            #{item.id}, #{item.sn}, #{item.no}, #{item.configWord}, #{item.supplierCode}, #{item.hardwareVer}, #{item.softwareVer}, #{item.hardwareNo}, #{item.softwareNo}, #{item.hsm}, #{item.deviceStatus}, #{item.iccid1}, #{item.iccid2}, #{item.imei}, 
             #{item.description}, now(), #{item.createBy}, now(), #{item.modifyBy}, 1, 1
         )
         </foreach>
@@ -88,6 +89,9 @@
         </if>
         <if test="hsm != null and hsm != ''">
             t.hsm = #{hsm},
+        </if>
+        <if test="deviceStatus != null">
+            t.device_status = #{deviceStatus},
         </if>
         <if test="iccid1 != null and iccid1 != ''">
             t.iccid1 = #{iccid1},
