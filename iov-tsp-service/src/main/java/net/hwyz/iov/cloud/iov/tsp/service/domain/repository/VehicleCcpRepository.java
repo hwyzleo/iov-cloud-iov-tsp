@@ -14,9 +14,18 @@ public interface VehicleCcpRepository {
 
     int update(VehicleCcp vehicleCcp);
 
+    /**
+     * 根据 binding_id 幂等 upsert 投影
+     */
     int upsertByBindingId(VehicleCcp vehicleCcp);
 
+    /**
+     * 根据 binding_id 查询
+     */
     VehicleCcp getByBindingId(Long bindingId);
 
+    /**
+     * 批量获取所有绑定（用于对账）
+     */
     List<VehicleCcp> getAllActiveBindings();
 }
