@@ -16,6 +16,12 @@ public class DeviceAdmissionCheckResult {
 
     private String admission;
     private String reason;
+    private String vin;
+    private String bindStatus;
+    private String certStatus;
+    private String deviceStatus;
+    private String bindVersion;
+    private String updatedAt;
     private CheckDetails checkDetails;
 
     @Data

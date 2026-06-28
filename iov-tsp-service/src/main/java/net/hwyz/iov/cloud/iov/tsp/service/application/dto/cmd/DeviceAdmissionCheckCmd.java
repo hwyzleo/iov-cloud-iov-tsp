@@ -21,4 +21,14 @@ public class DeviceAdmissionCheckCmd {
 
     @NotBlank(message = "车辆VIN不能为空")
     private String vin;
+
+    private String certSerial;
+
+    private String certFingerprint;
+
+    private String clientId;
+
+    private String sourceIp;
+
+    private Long ts;
 }

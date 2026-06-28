@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 public class DeviceAdmissionAppService {
 
     private final DeviceAdmissionDomainService deviceAdmissionDomainService;
-    private final DeviceAdmissionAssembler deviceAdmissionAssembler;
 
     /**
      * 执行设备接入鉴权检查
@@ -31,6 +30,6 @@ public class DeviceAdmissionAppService {
         DeviceAdmission deviceAdmission = deviceAdmissionDomainService.checkAdmission(
             cmd.getHsm(), cmd.getVin());
 
-        return deviceAdmissionAssembler.toResult(deviceAdmission);
+        return DeviceAdmissionAssembler.INSTANCE.toResult(deviceAdmission);
     }
 }
