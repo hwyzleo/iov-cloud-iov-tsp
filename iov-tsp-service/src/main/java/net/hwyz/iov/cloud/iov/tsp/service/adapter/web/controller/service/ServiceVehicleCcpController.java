@@ -35,7 +35,7 @@ public class ServiceVehicleCcpController {
         if (StrUtil.isBlank(vin) && StrUtil.isBlank(sn)) {
             throw new CcpBaseException("车架号与序列号不能都为空");
         }
-        return VehicleCcpExServiceAssembler.INSTANCE.fromPo(vehicleCcpAppService.get(vin, sn));
+        return VehicleCcpExServiceAssembler.INSTANCE.fromEntity(vehicleCcpAppService.get(vin, sn));
     }
 
 }
