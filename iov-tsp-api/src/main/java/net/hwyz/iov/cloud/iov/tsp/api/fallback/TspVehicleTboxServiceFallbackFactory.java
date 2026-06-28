@@ -23,11 +23,6 @@ public class TspVehicleTboxServiceFallbackFactory implements FallbackFactory<Tsp
                 log.error("车辆车联终端相关服务根据车架号[{}]或序列号[{}]获取车辆车联终端调用异常", vin, sn, throwable);
                 return null;
             }
-
-            @Override
-            public void bind(VehicleTboxVo vehicleTbox) {
-                log.error("车辆车联终端相关服务车辆[{}]绑定车联终端[{}]调用异常", vehicleTbox.getVin(), vehicleTbox.getSn(), throwable);
-            }
         };
     }
 }

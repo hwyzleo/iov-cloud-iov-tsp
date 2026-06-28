@@ -4,10 +4,7 @@ import net.hwyz.iov.cloud.framework.common.constant.ServiceNameConstants;
 import net.hwyz.iov.cloud.iov.tsp.api.fallback.TspVehicleTboxServiceFallbackFactory;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.VehicleTboxVo;
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
@@ -27,13 +24,4 @@ public interface TspVehicleTboxService {
      */
     @GetMapping("")
     VehicleTboxVo get(@RequestParam(required = false) String vin, @RequestParam(required = false) String sn);
-
-    /**
-     * 车辆绑定车联终端
-     *
-     * @param vehicleTbox 车辆车联终端
-     */
-    @PostMapping("/bind")
-    void bind(@RequestBody @Validated VehicleTboxVo vehicleTbox);
-
 }

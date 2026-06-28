@@ -23,11 +23,6 @@ public class TspVehicleCcpServiceFallbackFactory implements FallbackFactory<TspV
                 log.error("车辆中央计算平台相关服务根据车架号[{}]或序列号[{}]获取车辆中央计算平台调用异常", vin, sn, throwable);
                 return null;
             }
-
-            @Override
-            public void bind(VehicleCcpVo vehicleCcp) {
-                log.error("车辆中央计算平台相关服务车辆[{}]绑定中央计算平台[{}]调用异常", vehicleCcp.getVin(), vehicleCcp.getSn(), throwable);
-            }
         };
     }
 }

@@ -26,4 +26,44 @@ public class VehicleCcpVo {
      */
     private String sn;
 
+    /**
+     * 绑定ID
+     */
+    private Long bindingId;
+
+    /**
+     * 零件编码
+     */
+    private String partCode;
+
+    /**
+     * 车辆节点编码
+     */
+    private String vehicleNodeCode;
+
+    /**
+     * 设备类别
+     */
+    private String deviceCategory;
+
+    /**
+     * 绑定状态
+     */
+    private String bindState;
+
+    /**
+     * 绑定版本
+     */
+    private Long bindingVersion;
+
+    /**
+     * 最后事件时间
+     */
+    private String lastEventTime;
+
+    /**
+     * 数据来源
+     */
+    private String source;
+
 }
