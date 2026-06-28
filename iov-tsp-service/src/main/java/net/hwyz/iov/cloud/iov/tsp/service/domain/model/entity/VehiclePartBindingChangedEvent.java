@@ -11,36 +11,16 @@ import java.time.Instant;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class VehicleTbox {
-
-    private Long id;
+public class VehiclePartBindingChangedEvent {
 
     private String vin;
-
-    private String sn;
-
     private Long bindingId;
-
     private String partCode;
-
-    private String vehicleNodeCode;
-
+    private String sn;
     private String deviceCategory;
-
-    private String bindState;
-
-    private Long bindingVersion;
-
-    private Instant lastEventTime;
-
-    private String source;
-
-    private String description;
-
-    private String createBy;
-
-    private String modifyBy;
-
-    private Instant createTime;
-
+    private String vehicleNodeCode;
+    private String changeType; // BIND, UNBIND, REPLACE
+    private Long replaceOfBindingId;
+    private Instant occurredAt;
+    private Long seq;
 }
