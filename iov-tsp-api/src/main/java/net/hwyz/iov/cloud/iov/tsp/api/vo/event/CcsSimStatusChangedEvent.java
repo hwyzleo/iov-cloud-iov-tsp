@@ -1,4 +1,4 @@
-package net.hwyz.iov.cloud.iov.tsp.api.vo;
+package net.hwyz.iov.cloud.iov.tsp.api.vo.event;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -6,11 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.util.List;
 
 /**
- * 车辆网络VO
- * 重构为按VIN的卡列表结构
+ * CCS SIM状态变更事件
  *
  * @author hwyz_leo
  */
@@ -18,7 +16,7 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class VehicleNetworkVo implements Serializable {
+public class CcsSimStatusChangedEvent implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
@@ -27,13 +25,23 @@ public class VehicleNetworkVo implements Serializable {
     private String vin;
 
     /**
-     * SIM卡列表
+     * SIM卡号
      */
-    private List<VehicleSimVo> simList;
+    private String iccid;
 
     /**
-     * 描述
+     * SIM卡状态
      */
-    private String description;
+    private Integer simStatus;
+
+    /**
+     * 实名状态
+     */
+    private Integer realnameStatus;
+
+    /**
+     * 事件版本号
+     */
+    private Long version;
 
 }

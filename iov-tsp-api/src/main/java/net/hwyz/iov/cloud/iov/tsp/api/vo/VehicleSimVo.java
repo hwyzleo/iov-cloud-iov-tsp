@@ -6,11 +6,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
-import java.util.List;
 
 /**
- * 车辆网络VO
- * 重构为按VIN的卡列表结构
+ * 车辆SIM卡VO
  *
  * @author hwyz_leo
  */
@@ -18,22 +16,32 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class VehicleNetworkVo implements Serializable {
+public class VehicleSimVo implements Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
-     * 车架号
+     * 卡槽序号
      */
-    private String vin;
+    private Integer slotNo;
 
     /**
-     * SIM卡列表
+     * SIM卡号
      */
-    private List<VehicleSimVo> simList;
+    private String iccid;
 
     /**
-     * 描述
+     * SIM卡生命周期状态
      */
-    private String description;
+    private Integer simStatus;
+
+    /**
+     * 实名态
+     */
+    private Integer realnameStatus;
+
+    /**
+     * 套餐编码
+     */
+    private String packageCode;
 
 }
