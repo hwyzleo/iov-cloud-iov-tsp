@@ -10,7 +10,7 @@ spring:
     validate-on-migrate: false
     outOfOrder: true
     clean-on-validation-error: true
-    ignore-migration-patterns: "*:missing"
+    ignore-migration-patterns: "*:pending"
   cloud:
     nacos:
       discovery:
