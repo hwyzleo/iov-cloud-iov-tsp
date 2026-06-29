@@ -11,6 +11,8 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import net.hwyz.iov.cloud.framework.mysql.po.BasePo;
 
+import java.time.LocalDateTime;
+
 /**
  * <p>
  * 车联终端信息表 数据对象
@@ -90,10 +92,16 @@ public class TboxPo extends BasePo {
     private String hsm;
 
     /**
-     * 设备状态: 1-活跃, 2-未激活, 3-暂停, 4-停用
+     * 设备状态: 1-待激活, 2-在役, 3-报废, 4-冻结黑名单
      */
     @TableField("device_status")
     private Integer deviceStatus;
+
+    /**
+     * 首次成功接入（激活）时间，set-once；空 = 尚未激活
+     */
+    @TableField("activate_time")
+    private LocalDateTime activateTime;
 
     /**
      * 集成电路卡识别码1
