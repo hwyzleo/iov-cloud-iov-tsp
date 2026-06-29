@@ -7,10 +7,10 @@ spring:
     baseline-version: 0
     locations: db/migration
     table: flyway_schema_history
-    validate-on-migrate: false
-    outOfOrder: true
-    clean-on-validation-error: true
-    ignore-migration-patterns: "*:missing,*:pending,*:future,*:ignored"
+    validate-on-migrate: true
+    outOfOrder: false
+    clean-on-validation-error: false
+    ignore-migration-patterns: "*:missing,*:ignored"
   cloud:
     nacos:
       discovery:
