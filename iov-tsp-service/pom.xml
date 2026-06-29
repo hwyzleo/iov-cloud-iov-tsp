@@ -51,6 +51,16 @@
                     <skip>false</skip>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>9.22.3</version>
+                <configuration>
+                    <url>jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:iov_tsp}</url>
+                    <user>${DB_USER:root}</user>
+                    <password>${DB_PASSWORD:}</password>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 
