@@ -6,6 +6,7 @@ import cn.hutool.json.JSONUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.TboxCmdAppService;
+import net.hwyz.iov.cloud.iov.tsp.service.application.service.TboxEventAppService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.cloud.context.config.annotation.RefreshScope;
@@ -15,6 +16,7 @@ import reactor.core.publisher.Mono;
 import reactor.kafka.receiver.ReceiverOptions;
 
 import javax.annotation.PostConstruct;
+import java.time.LocalDateTime;
 import java.util.Collections;
 
 /**
@@ -36,6 +38,7 @@ public class TboxEventConsumer {
     private final String TOPIC_VAGW_TBOX_EVENT = "vagw-tbox-event";
 
     private final TboxCmdAppService tboxAppService;
+    private final TboxEventAppService tboxEventAppService;
 
     /**
      * 消费车辆接入网关事件消息
@@ -60,6 +63,12 @@ public class TboxEventConsumer {
                                 case "CMD_ACK" ->
                                         tboxAppService.cmdAck(event.getStr("cmdId"), event.getDate("ackTime"));
                                 case "FIND_VEHICLE" -> tboxAppService.remoteControlResponse(vin, eventType, event);
+                                case "DEVICE_ONLINE" -> {
+                                    String sn = event.getStr("sn");
+                                    LocalDateTime ts = event.getDate("ts").toInstant()
+                                            .atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
+                                    tboxEventAppService.handleDeviceOnline(sn, ts);
+                                }
                                 default -> log.warn("收到未知类型事件消息[{}]", eventJson);
                             }
                         } else {

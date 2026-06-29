@@ -34,6 +34,9 @@ public class ServiceTboxInfoController {
     public TboxVo getBySn(@PathVariable String sn) {
         log.info("根据序列号[{}]获取车联终端信息", sn);
         TboxResult result = tboxInfoAppService.getBySn(sn);
+        if (result == null) {
+            return null;
+        }
         return TboxVoAssembler.INSTANCE.toVo(result);
     }
 

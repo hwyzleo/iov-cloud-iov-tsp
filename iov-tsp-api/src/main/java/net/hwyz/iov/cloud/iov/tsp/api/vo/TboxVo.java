@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 /**
  * 对外服务车联终端信息
  *
@@ -55,6 +57,16 @@ public class TboxVo {
      * 硬件安全模块
      */
     private String hsm;
+
+    /**
+     * 设备状态
+     */
+    private Integer deviceStatus;
+
+    /**
+     * 激活时间
+     */
+    private LocalDateTime activateTime;
 
     /**
      * 集成电路卡识别码1
