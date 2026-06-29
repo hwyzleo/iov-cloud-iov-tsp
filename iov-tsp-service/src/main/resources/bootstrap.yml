@@ -9,6 +9,7 @@ spring:
     table: flyway_schema_history
     validate-on-migrate: true
     outOfOrder: true
+    ignore-migration-patterns: "*:missing,*:failed"
   cloud:
     nacos:
       discovery:
