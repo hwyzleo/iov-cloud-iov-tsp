@@ -1,10 +1,12 @@
 package net.hwyz.iov.cloud.iov.tsp.service.adapter.mq.consumer;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.VehicleBindingProjectionAppService;
+import net.hwyz.iov.cloud.iov.tsp.service.application.service.VehicleNetworkAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehiclePartBindingChangedEvent;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,6 +35,7 @@ public class VehiclePartBindingChangedConsumer {
     private final String TOPIC_VMD_VEHICLE_BINDING_CHANGED = "vmd-vehicle-binding-changed";
 
     private final VehicleBindingProjectionAppService projectionAppService;
+    private final VehicleNetworkAppService vehicleNetworkAppService;
 
     @PostConstruct
     public void consume() {
@@ -59,6 +62,8 @@ public class VehiclePartBindingChangedConsumer {
                                 .sn(event.getStr("sn"))
                                 .deviceCategory(event.getStr("deviceCategory"))
                                 .vehicleNodeCode(event.getStr("vehicleNodeCode"))
+                                .iccid1(event.getStr("iccid1"))
+                                .iccid2(event.getStr("iccid2"))
                                 .changeType(event.getStr("changeType"))
                                 .replaceOfBindingId(event.getLong("replaceOfBindingId"))
                                 .occurredAt(Instant.parse(event.getStr("occurredAt")))
@@ -66,6 +71,13 @@ public class VehiclePartBindingChangedConsumer {
                                 .build();
 
                             projectionAppService.handleBindingChangedEvent(bindingEvent);
+                            
+                            if (StrUtil.isNotBlank(bindingEvent.getIccid1())) {
+                                vehicleNetworkAppService.handleBindingChanged(vin, 1, bindingEvent.getIccid1());
+                            }
+                            if (StrUtil.isNotBlank(bindingEvent.getIccid2())) {
+                                vehicleNetworkAppService.handleBindingChanged(vin, 2, bindingEvent.getIccid2());
+                            }
                         } else {
                             log.warn("收到缺失VIN的异常绑定变更消息[{}]", eventJson);
                         }

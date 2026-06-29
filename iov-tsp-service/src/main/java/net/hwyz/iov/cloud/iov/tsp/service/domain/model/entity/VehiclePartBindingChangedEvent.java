@@ -19,6 +19,8 @@ public class VehiclePartBindingChangedEvent {
     private String sn;
     private String deviceCategory;
     private String vehicleNodeCode;
+    private String iccid1;
+    private String iccid2;
     private String changeType; // BIND, UNBIND, REPLACE
     private Long replaceOfBindingId;
     private Instant occurredAt;
