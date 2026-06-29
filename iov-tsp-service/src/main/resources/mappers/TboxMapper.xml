@@ -22,6 +22,7 @@
         <result column="software_no" property="softwareNo" />
         <result column="hsm" property="hsm" />
         <result column="device_status" property="deviceStatus" />
+        <result column="activate_time" property="activateTime" />
         <result column="iccid1" property="iccid1" />
         <result column="iccid2" property="iccid2" />
         <result column="imei" property="imei" />
@@ -29,7 +30,7 @@
 
     <!-- 通用查询结果列 -->
     <sql id="baseColumnList">
-        id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, device_status, iccid1, iccid2, imei, 
+        id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, device_status, activate_time, iccid1, iccid2, imei,
         description, create_time, create_by, modify_time, modify_by, row_version, row_valid
     </sql>
 
@@ -235,4 +236,17 @@
         WHERE t.row_valid = 1
         <!-- 添加自定义条件 -->
     </select>
+
+    <!-- 激活设备（条件更新） -->
+    <update id="activateDevice">
+        UPDATE tb_tbox t SET
+        t.device_status = #{activeStatus},
+        t.activate_time = #{activateTime},
+        t.modify_time = now(),
+        t.row_version = t.row_version + 1
+        WHERE t.sn = #{sn}
+        AND t.device_status = 1
+        AND t.activate_time IS NULL
+        AND t.row_valid = 1
+    </update>
 </mapper>

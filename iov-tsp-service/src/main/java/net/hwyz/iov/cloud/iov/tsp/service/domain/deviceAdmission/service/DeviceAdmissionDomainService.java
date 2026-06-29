@@ -11,6 +11,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.Devi
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.CertificateVerificationRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -22,6 +23,16 @@ import java.util.concurrent.CompletableFuture;
 @Service
 @RequiredArgsConstructor
 public class DeviceAdmissionDomainService {
+
+    private static final Set<DeviceStatus> ADMISSION_ALLOWED_STATUSES = Set.of(
+        DeviceStatus.PRE_ACTIVE,
+        DeviceStatus.ACTIVE
+    );
+
+    private static final Set<DeviceStatus> ADMISSION_DENIED_STATUSES = Set.of(
+        DeviceStatus.RETIRED,
+        DeviceStatus.BLOCKED
+    );
 
     private final DeviceAdmissionRepository deviceAdmissionRepository;
     private final DeviceAdmissionLogRepository deviceAdmissionLogRepository;
@@ -158,7 +169,14 @@ public class DeviceAdmissionDomainService {
 
             DeviceStatus status = DeviceStatus.fromCode(deviceStatusCode);
 
-            if (status != DeviceStatus.ACTIVE) {
+            if (ADMISSION_DENIED_STATUSES.contains(status)) {
+                return DeviceAdmission.CheckResult.builder()
+                    .status(CheckStatus.FAIL)
+                    .message("设备状态不允许接入: " + status.getDesc())
+                    .build();
+            }
+
+            if (!ADMISSION_ALLOWED_STATUSES.contains(status)) {
                 return DeviceAdmission.CheckResult.builder()
                     .status(CheckStatus.FAIL)
                     .message("设备状态无效: " + status.getDesc())
