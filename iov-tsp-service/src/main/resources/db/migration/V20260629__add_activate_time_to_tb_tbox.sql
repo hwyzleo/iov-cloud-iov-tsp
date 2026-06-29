@@ -1,14 +1,18 @@
 -- 添加 activate_time 字段到 tb_tbox 表（如果不存在）
+-- 使用存储过程来检查列是否存在
 DELIMITER //
 
-CREATE PROCEDURE IF NOT EXISTS add_column_if_not_exists()
+CREATE PROCEDURE add_column_if_not_exists()
 BEGIN
-    IF NOT EXISTS (
-        SELECT * FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = 'tb_tbox'
-        AND COLUMN_NAME = 'activate_time'
-    ) THEN
+    DECLARE column_exists INT DEFAULT 0;
+    
+    SELECT COUNT(*) INTO column_exists
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'tb_tbox'
+    AND COLUMN_NAME = 'activate_time';
+    
+    IF column_exists = 0 THEN
         ALTER TABLE tb_tbox ADD COLUMN activate_time DATETIME NULL COMMENT '首次成功接入（激活）时间，set-once；空 = 尚未激活';
     END IF;
 END //
