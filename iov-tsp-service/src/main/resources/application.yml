@@ -1,2 +1,10 @@
+spring:
+  kafka:
+    topics:
+      ccs-sim-status-changed: ccs-sim-status-changed
+    consumer:
+      group-id: tsp-vehicle-sim-status
+      reactive-concurrency: 3
+
 mybatis-plus:
   type-aliases-package: net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po
