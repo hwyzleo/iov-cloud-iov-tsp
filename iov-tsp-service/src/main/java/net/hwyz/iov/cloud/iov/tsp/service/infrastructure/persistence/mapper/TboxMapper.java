@@ -35,14 +35,14 @@ public interface TboxMapper extends BaseDao<TboxPo, Long> {
     TboxPo selectByHsm(String hsm);
 
     /**
-     * 激活设备（条件更新）
-     * 仅当 device_status=PRE_ACTIVE(1) 且 activate_time IS NULL 时更新
+     * 激活设备（幂等）
+     * 仅当 status=PRE_ACTIVE AND activate_time IS NULL 时更新
      *
      * @param sn 设备序列号
      * @param activateTime 激活时间
-     * @param activeStatus 激活后的状态值
+     * @param newStatus 新状态
      * @return 更新行数
      */
-    int activateDevice(@Param("sn") String sn, @Param("activateTime") LocalDateTime activateTime, @Param("activeStatus") Integer activeStatus);
+    int activateDevice(@Param("sn") String sn, @Param("activateTime") LocalDateTime activateTime, @Param("newStatus") Integer newStatus);
 
 }

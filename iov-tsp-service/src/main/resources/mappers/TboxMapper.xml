@@ -237,10 +237,10 @@
         <!-- 添加自定义条件 -->
     </select>
 
-    <!-- 激活设备（条件更新） -->
+    <!-- 激活设备（幂等） -->
     <update id="activateDevice">
         UPDATE tb_tbox t SET
-        t.device_status = #{activeStatus},
+        t.device_status = #{newStatus},
         t.activate_time = #{activateTime},
         t.modify_time = now(),
         t.row_version = t.row_version + 1
