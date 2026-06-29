@@ -22,7 +22,7 @@ public class VehicleSimLogRepositoryImpl implements VehicleSimLogRepository {
     @Override
     public VehicleSimLog save(VehicleSimLog vehicleSimLog) {
         var po = vehicleSimConverter.toLogPo(vehicleSimLog);
-        vehicleSimLogMapper.insert(po);
+        vehicleSimLogMapper.insertPo(po);
         vehicleSimLog.setId(po.getId());
         return vehicleSimLog;
     }

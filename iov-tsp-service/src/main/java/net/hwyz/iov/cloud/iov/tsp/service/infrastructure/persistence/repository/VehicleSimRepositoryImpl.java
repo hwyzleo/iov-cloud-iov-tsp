@@ -24,7 +24,7 @@ public class VehicleSimRepositoryImpl implements VehicleSimRepository {
     
     @Override
     public Optional<VehicleSim> getById(Long id) {
-        return Optional.ofNullable(vehicleSimMapper.selectById(id))
+        return Optional.ofNullable(vehicleSimMapper.selectPoById(id))
                 .map(vehicleSimConverter::toEntity);
     }
     
@@ -37,14 +37,14 @@ public class VehicleSimRepositoryImpl implements VehicleSimRepository {
     
     @Override
     public Optional<VehicleSim> getByIccid(String iccid) {
-        return vehicleSimMapper.selectByIccid(iccid)
+        return Optional.ofNullable(vehicleSimMapper.selectByIccid(iccid))
                 .map(vehicleSimConverter::toEntity);
     }
     
     @Override
     public VehicleSim save(VehicleSim vehicleSim) {
         VehicleSimPo po = vehicleSimConverter.toPo(vehicleSim);
-        vehicleSimMapper.insert(po);
+        vehicleSimMapper.insertPo(po);
         vehicleSim.setId(po.getId());
         return vehicleSim;
     }
@@ -52,7 +52,7 @@ public class VehicleSimRepositoryImpl implements VehicleSimRepository {
     @Override
     public void update(VehicleSim vehicleSim) {
         VehicleSimPo po = vehicleSimConverter.toPo(vehicleSim);
-        vehicleSimMapper.updateById(po);
+        vehicleSimMapper.updatePo(po);
     }
     
     @Override
