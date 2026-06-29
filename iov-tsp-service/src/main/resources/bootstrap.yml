@@ -9,6 +9,7 @@ spring:
     table: flyway_schema_history
     validate-on-migrate: false
     outOfOrder: true
+    clean-on-validation-error: true
   cloud:
     nacos:
       discovery:
