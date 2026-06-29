@@ -80,12 +80,12 @@ class DeviceAdmissionDomainServiceTest {
     }
 
     @Test
-    void checkAdmission_DeviceStatusInactive_ShouldReturnDeny() {
+    void checkAdmission_DeviceStatusRetired_ShouldReturnDeny() {
         String hsm = "test-hsm-123";
         String vin = "test-vin-456";
 
         when(deviceAdmissionRepository.findByHsm(hsm))
-            .thenReturn(Optional.of(new DeviceAdmissionRepository.TboxInfo(vin, hsm, 2)));
+            .thenReturn(Optional.of(new DeviceAdmissionRepository.TboxInfo(vin, hsm, 3)));
         when(certificateVerificationRepository.checkRevocation(hsm)).thenReturn(false);
 
         DeviceAdmission result = deviceAdmissionDomainService.checkAdmission(hsm);
