@@ -7,6 +7,8 @@ import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler.VehicleNetworkEx
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.cmd.VehicleNetworkCmd;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.VehicleNetworkAppService;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +21,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class ServiceVehicleNetworkController {
 
     private final VehicleNetworkAppService vehicleNetworkAppService;
+
+    @GetMapping("/{vin}")
+    public VehicleNetworkVo getByVin(@PathVariable String vin) {
+        log.info("查询车辆[{}]网联信息", vin);
+        return vehicleNetworkAppService.getByVin(vin);
+    }
 
     @PostMapping("")
     public void create(@RequestBody @Validated VehicleNetworkVo vehicleNetwork) {
