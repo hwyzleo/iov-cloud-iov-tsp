@@ -23,5 +23,4 @@ DELIMITER ;
 CALL add_column_if_not_exists();
 DROP PROCEDURE IF EXISTS add_column_if_not_exists;
 
--- 存量回填：所有存量 TBOX 统一 device_status = PRE_ACTIVE (1)、activate_time = NULL
-UPDATE tb_tbox SET device_status = 1 WHERE device_status IS NULL;
+
