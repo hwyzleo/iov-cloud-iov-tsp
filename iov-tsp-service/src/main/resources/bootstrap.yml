@@ -8,6 +8,7 @@ spring:
     locations: db/migration
     table: flyway_schema_history
     validate-on-migrate: true
+    outOfOrder: true
   cloud:
     nacos:
       discovery:
