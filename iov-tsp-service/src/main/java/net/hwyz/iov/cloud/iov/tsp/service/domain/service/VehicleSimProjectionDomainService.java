@@ -63,10 +63,12 @@ public class VehicleSimProjectionDomainService {
             return false;
         }
 
-        // 条件更新（幂等）
-        boolean updated = vehicleSimRepository.updateByIccidWithVersion(iccid, simStatus, realnameStatus, version);
+        // 通过实体领域方法应用投影（包含版本检查逻辑）
+        boolean applied = vehicleSim.applySimStatusProjection(simStatus, realnameStatus, version);
 
-        if (updated) {
+        if (applied) {
+            vehicleSimRepository.update(vehicleSim);
+
             // 记录审计日志
             VehicleSimLog logEntity = VehicleSimLog.builder()
                     .vin(vin)
@@ -101,13 +103,6 @@ public class VehicleSimProjectionDomainService {
     public void handleBindingChanged(String vin, Integer slotNo, String iccid) {
         log.info("处理绑定变更: vin={}, slotNo={}, iccid={}", vin, slotNo, iccid);
 
-        // 检查是否已存在
-        Optional<VehicleSim> existingSim = vehicleSimRepository.getByIccid(iccid);
-        if (existingSim.isPresent()) {
-            log.info("ICCID已存在: iccid={}, 跳过处理", iccid);
-            return;
-        }
-
         // 查找或创建卡行
         List<VehicleSim> vehicleSims = vehicleSimRepository.getByVin(vin);
         Optional<VehicleSim> targetSim = vehicleSims.stream()
@@ -119,15 +114,19 @@ public class VehicleSimProjectionDomainService {
             vehicleSimRepository.updateIccidByVinAndSlot(vin, slotNo, iccid);
             log.info("更新卡槽ICCID: vin={}, slotNo={}, iccid={}", vin, slotNo, iccid);
         } else {
-            // 创建新卡行
-            VehicleSim newSim = VehicleSim.builder()
-                    .vin(vin)
-                    .slotNo(slotNo)
-                    .iccid(iccid)
-                    .build();
-            newSim.initDefaultState();
-            vehicleSimRepository.save(newSim);
-            log.info("创建新卡行: vin={}, slotNo={}, iccid={}", vin, slotNo, iccid);
+            // 创建新卡行，利用数据库唯一约束防止并发重复插入
+            try {
+                VehicleSim newSim = VehicleSim.builder()
+                        .vin(vin)
+                        .slotNo(slotNo)
+                        .iccid(iccid)
+                        .build();
+                newSim.initDefaultState();
+                vehicleSimRepository.save(newSim);
+                log.info("创建新卡行: vin={}, slotNo={}, iccid={}", vin, slotNo, iccid);
+            } catch (org.springframework.dao.DuplicateKeyException e) {
+                log.info("ICCID并发插入冲突(已由其他线程创建): iccid={}, 跳过处理", iccid);
+            }
         }
     }
 }
