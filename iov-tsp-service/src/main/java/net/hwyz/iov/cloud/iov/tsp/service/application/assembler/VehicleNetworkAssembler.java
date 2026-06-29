@@ -22,7 +22,7 @@ public interface VehicleNetworkAssembler {
             return null;
         }
         return simList.stream()
-                .filter(sim -> sim.getSlotNo() != null && sim.getSlotNo() == 1)
+                .filter(sim -> Integer.valueOf(1).equals(sim.getSlotNo()))
                 .map(VehicleNetworkCmd.VehicleSimCmd::getIccid)
                 .findFirst()
                 .orElse(null);
@@ -34,7 +34,7 @@ public interface VehicleNetworkAssembler {
             return null;
         }
         return simList.stream()
-                .filter(sim -> sim.getSlotNo() != null && sim.getSlotNo() == 2)
+                .filter(sim -> Integer.valueOf(2).equals(sim.getSlotNo()))
                 .map(VehicleNetworkCmd.VehicleSimCmd::getIccid)
                 .findFirst()
                 .orElse(null);
