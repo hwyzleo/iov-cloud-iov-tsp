@@ -1,3 +1,4 @@
+-- V2__add_activate_time_to_tb_tbox.sql
 -- 添加 activate_time 字段到 tb_tbox 表（如果不存在）
 -- 使用存储过程来检查列是否存在
 DELIMITER //

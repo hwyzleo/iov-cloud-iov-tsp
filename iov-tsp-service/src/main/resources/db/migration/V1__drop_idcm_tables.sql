@@ -1,3 +1,4 @@
+-- V1__drop_idcm_tables.sql
 -- TSP-DSN-CR-002: 删除 IDCM 设备表/绑定表/接口/异常，TSP 退出 IDCM 设计层
 -- 落地 TSP-REQ-CR-002
 

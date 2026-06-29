@@ -1,4 +1,4 @@
--- V20260628__add_binding_projection_support.sql
+-- V4__add_binding_projection_support.sql
 
 -- 1. 修改 tb_vehicle_tbox 表，新增投影治理字段
 ALTER TABLE tb_vehicle_tbox ADD COLUMN binding_id BIGINT COMMENT 'VMD binding_id，投影幂等主键';

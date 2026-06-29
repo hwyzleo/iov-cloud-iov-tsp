@@ -1,4 +1,4 @@
--- V20260627__add_device_admission_support.sql
+-- V3__add_device_admission_support.sql
 
 -- 1. 修改 tb_tbox 表，新增 device_status 字段
 ALTER TABLE tb_tbox ADD COLUMN device_status TINYINT NOT NULL DEFAULT 1 COMMENT '设备状态: 1-活跃, 2-未激活, 3-暂停, 4-停用';
