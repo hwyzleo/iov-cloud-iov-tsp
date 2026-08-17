@@ -56,4 +56,10 @@ public class VehicleTboxProjectionRepositoryImpl implements VehicleTboxProjectio
         }
         return vehicleTboxConverter.toEntity(poList.get(0));
     }
+
+    @Override
+    public List<VehicleTbox> listActiveTboxBindingsByVin(String vin) {
+        List<VehicleTboxPo> poList = vehicleTboxMapper.selectActiveByVinAndCategory(vin, "TBOX");
+        return vehicleTboxConverter.toEntityList(poList);
+    }
 }
