@@ -41,7 +41,7 @@
             description, create_time, create_by, modify_time, modify_by, row_version, row_valid
         )
         VALUES (
-            #{id}, #{sn}, #{no}, #{configWord}, #{supplierCode}, #{hardwareVer}, #{softwareVer}, #{hardwareNo}, #{softwareNo}, #{hsm}, #{deviceStatus}, #{iccid1}, #{iccid2}, #{imei}, 
+            #{id}, #{sn}, #{no}, #{configWord}, #{supplierCode}, #{hardwareVer}, #{softwareVer}, #{hardwareNo}, #{softwareNo}, #{hsm}, COALESCE(#{deviceStatus}, 1), #{iccid1}, #{iccid2}, #{imei}, 
             #{description}, now(), #{createBy}, now(), #{modifyBy}, 1, 1
         )
     </insert>
@@ -55,7 +55,7 @@
         VALUES
         <foreach collection="list" item="item" index="index" separator=",">
         (
-            #{item.id}, #{item.sn}, #{item.no}, #{item.configWord}, #{item.supplierCode}, #{item.hardwareVer}, #{item.softwareVer}, #{item.hardwareNo}, #{item.softwareNo}, #{item.hsm}, #{item.deviceStatus}, #{item.iccid1}, #{item.iccid2}, #{item.imei}, 
+            #{item.id}, #{item.sn}, #{item.no}, #{item.configWord}, #{item.supplierCode}, #{item.hardwareVer}, #{item.softwareVer}, #{item.hardwareNo}, #{item.softwareNo}, #{item.hsm}, COALESCE(#{item.deviceStatus}, 1), #{item.iccid1}, #{item.iccid2}, #{item.imei}, 
             #{item.description}, now(), #{item.createBy}, now(), #{item.modifyBy}, 1, 1
         )
         </foreach>

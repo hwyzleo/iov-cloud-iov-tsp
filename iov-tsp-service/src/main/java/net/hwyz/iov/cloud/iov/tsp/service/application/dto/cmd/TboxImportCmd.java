@@ -27,6 +27,11 @@ public class TboxImportCmd {
 
     private String hsm;
 
+    /**
+     * 设备状态: 1-待激活, 2-在役, 3-报废, 4-冻结黑名单；为空默认待激活
+     */
+    private Integer deviceStatus;
+
     private String iccid1;
 
     private String iccid2;
