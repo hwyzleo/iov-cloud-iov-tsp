@@ -32,7 +32,7 @@ jobs:
 
       - name: Sync branches and tags to Gitee
         run: |
-          git remote add gitee git@gitee.com:hwyz_leo/iov-cloud-edd-vmd.git
+          git remote add gitee git@gitee.com:hwyz_leo/iov-cloud-iov-tsp.git
 
           git fetch origin \
             '+refs/heads/*:refs/remotes/origin/*' \
