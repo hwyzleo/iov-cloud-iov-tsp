@@ -1,7 +1,8 @@
 spring:
   kafka:
     topics:
-      ccs-sim-status-changed: ccs-sim-status-changed
+      ccs.sim-status.changed: ccs.sim-status.changed
+      vmd.vehicle-part-binding.changed: vmd.vehicle-part-binding.changed
     consumer:
       group-id: tsp-vehicle-sim-status
       reactive-concurrency: 3

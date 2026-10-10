@@ -20,7 +20,7 @@ import java.util.Collections;
 
 /**
  * 车辆SIM状态事件消费者
- * 订阅 ccs-sim-status-changed topic
+ * 订阅 ccs.sim-status.changed topic
  *
  * @author hwyz_leo
  */
@@ -35,7 +35,7 @@ public class VehicleSimStatusConsumer {
     @Value("${spring.kafka.consumer.reactive-concurrency:5}")
     private Integer concurrency;
 
-    private final String TOPIC_CCS_SIM_STATUS_CHANGED = "ccs-sim-status-changed";
+    private final String TOPIC_CCS_SIM_STATUS_CHANGED = "ccs.sim-status.changed";
 
     private final VehicleNetworkAppService vehicleNetworkAppService;
     private final SimStatusEventTranslator simStatusEventTranslator;

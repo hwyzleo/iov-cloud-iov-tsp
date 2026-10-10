@@ -32,7 +32,7 @@ public class VehiclePartBindingChangedConsumer {
     @Value("${spring.kafka.consumer.reactive-concurrency:5}")
     private Integer concurrency;
 
-    private final String TOPIC_VMD_VEHICLE_BINDING_CHANGED = "vmd-vehicle-binding-changed";
+    private final String TOPIC_VMD_VEHICLE_BINDING_CHANGED = "vmd.vehicle-part-binding.changed";
 
     private final VehicleBindingProjectionAppService projectionAppService;
     private final VehicleNetworkAppService vehicleNetworkAppService;
