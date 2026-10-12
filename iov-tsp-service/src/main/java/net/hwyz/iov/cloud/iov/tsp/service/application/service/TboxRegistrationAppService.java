@@ -2,18 +2,36 @@ package net.hwyz.iov.cloud.iov.tsp.service.application.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.hwyz.iov.cloud.iov.tsp.api.vo.event.TboxDeviceOnlineEvent;
+import net.hwyz.iov.cloud.framework.common.util.StrUtil;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.event.TboxV2cKeyProvisionedEvent;
+import net.hwyz.iov.cloud.iov.tsp.service.application.dto.command.RecordTboxOnlineCmd;
+import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.DeviceOnlineOutcome;
+import net.hwyz.iov.cloud.iov.tsp.service.application.service.support.TboxEventDigest;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.HsmUidNormalizer;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleTbox;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.TboxRegistrationEventRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.VehicleTboxProjectionRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.ActivationOutcome;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxRegistrationEventRecord;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.service.DeviceRegistrationDomainService;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.TboxMapper;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.TboxPo;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * TBOX 注册激活应用服务
  * <p>
  * TSP-DSN-CR-008：编排设备登录记录与 V2C 业务激活完成。
+ * TSP-DSN-CR-010：
+ * <ul>
+ *   <li>DEVICE_ONLINE 应用层校验（TBOX 身份唯一、tboxSn、active 绑定、VIN 一致性）与契约摘要冲突检测；</li>
+ *   <li>本服务是 {@code tb_tbox_registration_event} 的唯一写入者（R4），领域服务只更新 {@code tb_tbox}。</li>
+ * </ul>
  *
  * @author hwyz_leo
  */
@@ -23,34 +41,147 @@ import java.time.ZoneId;
 public class TboxRegistrationAppService {
 
     private final DeviceRegistrationDomainService deviceRegistrationDomainService;
+    private final TboxMapper tboxMapper;
+    private final VehicleTboxProjectionRepository vehicleTboxProjectionRepository;
+    private final TboxRegistrationEventRepository tboxRegistrationEventRepository;
 
     /**
-     * 处理设备上线事件：记录首次/最近登录时间并驱动 PRE_ACTIVE -> ACTIVATING
+     * 处理设备上线命令：校验身份/绑定后记录首次/最近登录时间并驱动 PRE_ACTIVE -> ACTIVATING。
      *
-     * @param event TBOX 设备上线事件
+     * @param cmd 内部上线命令（hsmUid 已规范化）
+     * @return 处理结果
      */
-    public void handleOnline(TboxDeviceOnlineEvent event) {
-        if (event == null) {
-            log.warn("收到空的 DEVICE_ONLINE 事件，忽略");
-            return;
+    @Transactional
+    public DeviceOnlineOutcome handleOnline(RecordTboxOnlineCmd cmd) {
+        if (cmd == null) {
+            log.warn("收到空的 DEVICE_ONLINE 命令，忽略");
+            return DeviceOnlineOutcome.PROCESSED;
         }
-        LocalDateTime ts = event.getTs() != null
-                ? LocalDateTime.ofInstant(event.getTs(), ZoneId.systemDefault())
-                : LocalDateTime.now();
-        log.debug("处理设备上线事件, eventId={}, hsmUid={}, tboxSn={}, ts={}",
-                event.getEventId(), event.getHsmUid(), event.getTboxSn(), ts);
-        deviceRegistrationDomainService.recordSuccessfulLogin(event.getEventId(), event.getHsmUid(), event.getTboxSn(), ts);
+        String hsmUid = HsmUidNormalizer.normalize(cmd.hsmUid());
+        if (!HsmUidNormalizer.isValid(hsmUid)) {
+            log.warn("DEVICE_ONLINE 非法身份 hsmUid 摘要[{}]，隔离", mask(hsmUid));
+            return DeviceOnlineOutcome.PERMANENT_TBOX_IDENTITY_CONFLICT;
+        }
+
+        String digest = TboxEventDigest.deviceOnline(cmd);
+        Optional<TboxRegistrationEventRecord> existing =
+                tboxRegistrationEventRepository.findByEventId(cmd.eventId());
+        if (existing.isPresent()) {
+            TboxRegistrationEventRecord record = existing.get();
+            String existingDigest = record.contractDigest();
+            if (StrUtil.isBlank(existingDigest) || existingDigest.equals(digest)) {
+                log.debug("DEVICE_ONLINE 事件[{}]已消费，幂等成功", cmd.eventId());
+                return DeviceOnlineOutcome.DUPLICATE;
+            }
+            log.warn("DEVICE_ONLINE 事件契约冲突: eventId={}, 已存摘要与当前不一致，拒绝并告警", cmd.eventId());
+            return DeviceOnlineOutcome.PERMANENT_CONTRACT_CONFLICT;
+        }
+
+        List<TboxPo> tbList = tboxMapper.selectAllByHsm(hsmUid);
+        if (tbList == null || tbList.isEmpty()) {
+            log.warn("DEVICE_ONLINE 设备不存在, hsmUid摘要[{}], eventId={}，进入对账重试", mask(hsmUid), cmd.eventId());
+            return DeviceOnlineOutcome.RETRY_TBOX_NOT_FOUND;
+        }
+        if (tbList.size() > 1) {
+            log.warn("DEVICE_ONLINE HSM 身份不唯一, hsmUid摘要[{}], 命中{}条, eventId={}，隔离",
+                    mask(hsmUid), tbList.size(), cmd.eventId());
+            return DeviceOnlineOutcome.PERMANENT_TBOX_IDENTITY_CONFLICT;
+        }
+        TboxPo tbox = tbList.get(0);
+
+        if (StrUtil.isNotBlank(cmd.tboxSn()) && !cmd.tboxSn().equals(tbox.getSn())) {
+            log.warn("DEVICE_ONLINE tboxSn 与本地设备不一致, eventId={}，拒绝", cmd.eventId());
+            return DeviceOnlineOutcome.PERMANENT_TBOX_SN_MISMATCH;
+        }
+
+        List<VehicleTbox> activeBindings =
+                vehicleTboxProjectionRepository.listActiveTboxBindingsBySn(tbox.getSn());
+        if (activeBindings == null || activeBindings.isEmpty()) {
+            log.warn("DEVICE_ONLINE 无 active 绑定投影, deviceSn={}, eventId={}，进入对账重试", tbox.getSn(), cmd.eventId());
+            return DeviceOnlineOutcome.RETRY_UNBOUND;
+        }
+        if (activeBindings.size() > 1) {
+            log.warn("DEVICE_ONLINE active 绑定冲突, deviceSn={}, 命中{}条, eventId={}，隔离",
+                    tbox.getSn(), activeBindings.size(), cmd.eventId());
+            return DeviceOnlineOutcome.PERMANENT_BINDING_CONFLICT;
+        }
+        VehicleTbox binding = activeBindings.get(0);
+        if (StrUtil.isNotBlank(cmd.vin()) && !cmd.vin().equals(binding.getVin())) {
+            log.warn("DEVICE_ONLINE event.vin 与当前 active VIN 不一致, deviceSn={}, eventId={}，拒绝且不回写投影",
+                    tbox.getSn(), cmd.eventId());
+            return DeviceOnlineOutcome.PERMANENT_VIN_MISMATCH;
+        }
+
+        int updated = deviceRegistrationDomainService.recordSuccessfulLogin(
+                tbox.getId(), tbox.getSn(), cmd.eventId(), cmd.occurredAt(), cmd.connectionGeneration());
+        if (updated == 0) {
+            log.warn("DEVICE_ONLINE 未推进状态（BLOCKED/RETIRED），保留审计, deviceSn={}, eventId={}",
+                    tbox.getSn(), cmd.eventId());
+        }
+        saveEvent(new TboxRegistrationEventRecord(
+                cmd.eventId(), null, tbox.getSn(),
+                DeviceRegistrationDomainService.EVENT_TYPE_DEVICE_ONLINE,
+                cmd.occurredAt(), LocalDateTime.now(), "SUCCEEDED", digest,
+                cmd.sourceTopic(), cmd.connectionGeneration()));
+        return DeviceOnlineOutcome.PROCESSED;
     }
 
     /**
-     * 处理 VMD V2C 业务密钥开通结果事件：驱动 ACTIVATING -> ACTIVE
+     * 处理 VMD V2C 业务密钥开通结果事件：驱动 ACTIVATING -> ACTIVE，并由本服务写入事件事实。
      *
      * @param event VMD V2C 密钥开通结果事件
-     * @return 是否完成激活
+     * @return 是否完成激活（含幂等成功）
      */
+    @Transactional
     public boolean handleV2cProvisioned(TboxV2cKeyProvisionedEvent event) {
-        log.debug("处理 V2C 密钥开通结果事件, requestId={}",
-                event != null ? event.getRequestId() : null);
-        return deviceRegistrationDomainService.completeActivation(event);
+        if (event == null) {
+            log.warn("收到空的 V2C 聚合完成事件，忽略");
+            return false;
+        }
+        String eventId = event.getEventId();
+        String requestId = event.getRequestId();
+        String digest = TboxEventDigest.v2c(event);
+
+        Optional<TboxRegistrationEventRecord> byEventId = tboxRegistrationEventRepository.findByEventId(eventId);
+        if (byEventId.isPresent()) {
+            if (isDigestConflict(byEventId.get().contractDigest(), digest)) {
+                log.warn("V2C 聚合完成事件契约冲突: eventId={}, 摘要不一致，拒绝并告警", eventId);
+                return false;
+            }
+            log.info("V2C 聚合完成事件[{}]已消费，幂等成功", eventId);
+            return true;
+        }
+        Optional<TboxRegistrationEventRecord> byRequest = tboxRegistrationEventRepository
+                .findByEventTypeAndRequestId(DeviceRegistrationDomainService.EVENT_TYPE_V2C_KEY_PROVISIONED, requestId);
+        if (byRequest.isPresent()) {
+            if (isDigestConflict(byRequest.get().contractDigest(), digest)) {
+                log.warn("V2C 聚合完成事件契约冲突: requestId={}, 摘要不一致，拒绝并告警", requestId);
+                return false;
+            }
+            log.info("V2C 聚合完成事件 requestId={} 已消费，幂等成功", requestId);
+            return true;
+        }
+
+        ActivationOutcome outcome = deviceRegistrationDomainService.completeActivation(event);
+        if (outcome == ActivationOutcome.ACTIVATED || outcome == ActivationOutcome.IDEMPOTENT_ACTIVE) {
+            saveEvent(new TboxRegistrationEventRecord(
+                    eventId, requestId, event.getDeviceSn(),
+                    DeviceRegistrationDomainService.EVENT_TYPE_V2C_KEY_PROVISIONED,
+                    event.getOccurredAt(), LocalDateTime.now(), "SUCCEEDED", digest, null, null));
+            return true;
+        }
+        return false;
+    }
+
+    private boolean isDigestConflict(String existingDigest, String currentDigest) {
+        return StrUtil.isNotBlank(existingDigest) && !existingDigest.equals(currentDigest);
+    }
+
+    private void saveEvent(TboxRegistrationEventRecord record) {
+        tboxRegistrationEventRepository.save(record);
+    }
+
+    private String mask(String hsmUid) {
+        return net.hwyz.iov.cloud.iov.tsp.service.common.util.SensitiveDataMasker.maskHsmUid(hsmUid);
     }
 }

@@ -8,7 +8,33 @@ spring:
       group-id: tsp-vehicle-sim-status
       reactive-concurrency: 3
 
+# FW-KAFKA Topic Provisioning：TSP 仅为自产的失败隔离 DLT Topic 声明创建定义；
+# vagw.device.online 由 VAGW 作为 Producer/Provisioning Owner，TSP 只消费、不重复声明。
+iov:
+  kafka:
+    topic-provisioning:
+      enabled: true
+
 tsp:
+  kafka:
+    # DEVICE_ONLINE 消费者（TSP-DSN-CR-010）：独立 Consumer Group，手动 ack + Retry/DLT
+    device-online:
+      enabled: true
+      topic: vagw.device.online
+      group-id: iov-tsp-device-online
+      retry:
+        max-attempts: 5
+        initial-backoff: 1s
+        max-backoff: 30s
+      dlt:
+        enabled: true
+        topic: ${TSP_DEVICE_ONLINE_DLT_TOPIC:tsp.device-online.dlt}
+        partitions: ${TSP_DEVICE_ONLINE_DLT_PARTITIONS:6}
+        replication-factor: ${TSP_DEVICE_ONLINE_DLT_REPLICATION_FACTOR:1}
+    # 旧 vagw-tbox-event 链路默认关闭；CMD_ACK/FIND_VEHICLE 待 TSP-CR-011 恢复
+    legacy-tbox-event:
+      enabled: false
+      topic: vagw-tbox-event
   tbox-registration:
     # TBOX 注册激活（V2C 聚合完成事件消费）发布门禁：默认关闭，仅在 VMD 聚合事件/Topic/端到端契约测试就绪后开启
     v2c-activation:
@@ -20,6 +46,14 @@ tsp:
     export-max-rows: 10000
     default-page-size: 20
     max-page-size: 200
+
+management:
+  endpoint:
+    health:
+      group:
+        # 注册激活专用健康组：仅代表 DEVICE_ONLINE 消费能力，不影响全局 readiness
+        registrationActivation:
+          include: deviceOnlineConsumer
 
 mybatis-plus:
   type-aliases-package: net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po

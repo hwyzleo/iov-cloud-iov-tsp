@@ -70,6 +70,16 @@ public class TboxRegistrationEventPo {
     private String contractDigest;
 
     /**
+     * 来源 Kafka Topic（DEVICE_ONLINE，TSP-DSN-CR-010）
+     */
+    private String sourceTopic;
+
+    /**
+     * VAGW 连接代际（DEVICE_ONLINE，TSP-DSN-CR-010）
+     */
+    private Long connectionGeneration;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createTime;

@@ -52,6 +52,8 @@ public class TboxRegistrationEventRepositoryImpl implements TboxRegistrationEven
                 .processedAt(record.processedAt())
                 .result(record.result())
                 .contractDigest(record.contractDigest())
+                .sourceTopic(record.sourceTopic())
+                .connectionGeneration(record.connectionGeneration())
                 .createTime(LocalDateTime.now())
                 .build());
     }
@@ -67,7 +69,9 @@ public class TboxRegistrationEventRepositoryImpl implements TboxRegistrationEven
                         : null,
                 po.getProcessedAt(),
                 po.getResult(),
-                po.getContractDigest());
+                po.getContractDigest(),
+                po.getSourceTopic(),
+                po.getConnectionGeneration());
     }
 
     private LocalDateTime toLocalDateTime(java.time.Instant instant) {

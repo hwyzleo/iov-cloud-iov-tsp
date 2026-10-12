@@ -27,7 +27,7 @@ public interface TboxMapper extends BaseDao<TboxPo, Long> {
     TboxPo selectBySn(String sn);
 
     /**
-     * 根据HSM查询车联终端信息
+     * 根据HSM查询车联终端信息（LIMIT 1，兼容旧调用）
      *
      * @param hsm 硬件安全模块标识
      * @return 车联终端信息
@@ -35,22 +35,31 @@ public interface TboxMapper extends BaseDao<TboxPo, Long> {
     TboxPo selectByHsm(String hsm);
 
     /**
-     * 记录成功登录（幂等）
+     * 根据规范化 HSM 查询全部有效设备（不 LIMIT，用于检测 0/多条身份冲突）
+     *
+     * @param hsm 规范化硬件安全模块标识
+     * @return 设备列表
+     */
+    java.util.List<TboxPo> selectAllByHsm(@Param("hsm") String hsm);
+
+    /**
+     * 记录成功登录（幂等，按已解析主键更新）
      * first_login_time set-once；last_login_time 取 max(existing, ts)；
      * PRE_ACTIVE -> ACTIVATING；ACTIVE 仅刷新 last_login_time；BLOCKED/RETIRED 不更新。
+     * TSP-DSN-CR-010：不再使用非唯一 WHERE hsm=?，改按主键条件更新。
      *
-     * @param hsmUid           规范设备身份（tb_tbox.hsm）
+     * @param id               设备主键
      * @param ts               事件时间
      * @param preActiveStatus  PRE_ACTIVE 码值
      * @param activatingStatus ACTIVATING 码值
      * @param activeStatus     ACTIVE 码值
      * @return 更新行数
      */
-    int recordLogin(@Param("hsmUid") String hsmUid,
-                    @Param("ts") LocalDateTime ts,
-                    @Param("preActiveStatus") Integer preActiveStatus,
-                    @Param("activatingStatus") Integer activatingStatus,
-                    @Param("activeStatus") Integer activeStatus);
+    int recordLoginById(@Param("id") Long id,
+                        @Param("ts") LocalDateTime ts,
+                        @Param("preActiveStatus") Integer preActiveStatus,
+                        @Param("activatingStatus") Integer activatingStatus,
+                        @Param("activeStatus") Integer activeStatus);
 
     /**
      * 完成业务激活（幂等）

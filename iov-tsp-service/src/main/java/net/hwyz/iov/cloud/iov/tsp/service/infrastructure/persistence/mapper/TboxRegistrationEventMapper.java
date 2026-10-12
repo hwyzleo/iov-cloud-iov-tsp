@@ -20,7 +20,8 @@ public interface TboxRegistrationEventMapper {
 
     String COLUMNS = "id, event_id AS eventId, request_id AS requestId, device_sn AS deviceSn, "
             + "event_type AS eventType, occurred_at AS occurredAt, processed_at AS processedAt, "
-            + "result, contract_digest AS contractDigest, create_time AS createTime";
+            + "result, contract_digest AS contractDigest, source_topic AS sourceTopic, "
+            + "connection_generation AS connectionGeneration, create_time AS createTime";
 
     /**
      * 根据事件ID查询
@@ -60,8 +61,9 @@ public interface TboxRegistrationEventMapper {
      * @return 影响行数
      */
     @Insert("INSERT INTO tb_tbox_registration_event "
-            + "(event_id, request_id, device_sn, event_type, occurred_at, processed_at, result, contract_digest, create_time) "
+            + "(event_id, request_id, device_sn, event_type, occurred_at, processed_at, result, contract_digest, "
+            + "source_topic, connection_generation, create_time) "
             + "VALUES (#{eventId}, #{requestId}, #{deviceSn}, #{eventType}, #{occurredAt}, #{processedAt}, "
-            + "#{result}, #{contractDigest}, #{createTime})")
+            + "#{result}, #{contractDigest}, #{sourceTopic}, #{connectionGeneration}, #{createTime})")
     int insert(TboxRegistrationEventPo po);
 }
