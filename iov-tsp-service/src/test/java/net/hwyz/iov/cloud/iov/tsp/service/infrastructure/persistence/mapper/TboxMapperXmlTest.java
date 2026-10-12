@@ -25,6 +25,8 @@ class TboxMapperXmlTest {
     private static final String TBOX_NAMESPACE = "net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.TboxMapper";
     private static final String VEHICLE_TBOX_MAPPER_XML = "/mappers/VehicleTboxMapper.xml";
     private static final String VEHICLE_TBOX_NAMESPACE = "net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.VehicleTboxMapper";
+    private static final String TBOX_MGMT_MAPPER_XML = "/mappers/TboxManagementQueryMapper.xml";
+    private static final String TBOX_MGMT_NAMESPACE = "net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.TboxManagementQueryMapper";
 
     @Test
     void tboxMapperXml_ShouldLoadAndDeclareRegistrationStatements() throws Exception {
@@ -58,8 +60,21 @@ class TboxMapperXmlTest {
                 "缺少 selectByEventId 语句");
         assertTrue(configuration.hasStatement(namespace + ".selectByEventTypeAndRequestId"),
                 "缺少 selectByEventTypeAndRequestId 语句");
+        assertTrue(configuration.hasStatement(namespace + ".selectByDeviceSn"),
+                "缺少 selectByDeviceSn 语句");
         assertTrue(configuration.hasStatement(namespace + ".insert"),
                 "缺少 insert 语句");
+    }
+
+    @Test
+    void tboxManagementQueryMapperXml_ShouldDeclareListAndDetailStatements() throws Exception {
+        Configuration configuration = new Configuration();
+        parse(configuration, TBOX_MGMT_MAPPER_XML);
+
+        assertTrue(configuration.hasStatement(TBOX_MGMT_NAMESPACE + ".selectPageByCriteria"),
+                "缺少 selectPageByCriteria 语句");
+        assertTrue(configuration.hasStatement(TBOX_MGMT_NAMESPACE + ".selectBySn"),
+                "缺少 selectBySn 语句");
     }
 
     private void parse(Configuration configuration, String mapperXml) throws Exception {

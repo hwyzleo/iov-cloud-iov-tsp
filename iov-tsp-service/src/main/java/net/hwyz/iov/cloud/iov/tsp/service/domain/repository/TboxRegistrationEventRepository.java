@@ -2,6 +2,7 @@ package net.hwyz.iov.cloud.iov.tsp.service.domain.repository;
 
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxRegistrationEventRecord;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -27,6 +28,14 @@ public interface TboxRegistrationEventRepository {
      * @return 消费记录
      */
     Optional<TboxRegistrationEventRecord> findByEventTypeAndRequestId(String eventType, String requestId);
+
+    /**
+     * 根据设备序列号查询消费记录（时间线组装，TSP-DSN-CR-009）
+     *
+     * @param deviceSn 设备序列号
+     * @return 消费记录列表（按事件发生时间升序）
+     */
+    List<TboxRegistrationEventRecord> listByDeviceSn(String deviceSn);
 
     /**
      * 保存消费记录

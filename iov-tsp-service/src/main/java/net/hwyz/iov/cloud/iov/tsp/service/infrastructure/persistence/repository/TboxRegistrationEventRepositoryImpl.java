@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -31,6 +32,13 @@ public class TboxRegistrationEventRepositoryImpl implements TboxRegistrationEven
     public Optional<TboxRegistrationEventRecord> findByEventTypeAndRequestId(String eventType, String requestId) {
         return Optional.ofNullable(tboxRegistrationEventMapper.selectByEventTypeAndRequestId(eventType, requestId))
                 .map(this::toRecord);
+    }
+
+    @Override
+    public List<TboxRegistrationEventRecord> listByDeviceSn(String deviceSn) {
+        return tboxRegistrationEventMapper.selectByDeviceSn(deviceSn).stream()
+                .map(this::toRecord)
+                .toList();
     }
 
     @Override

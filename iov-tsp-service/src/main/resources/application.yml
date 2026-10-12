@@ -13,6 +13,13 @@ tsp:
     # TBOX 注册激活（V2C 聚合完成事件消费）发布门禁：默认关闭，仅在 VMD 聚合事件/Topic/端到端契约测试就绪后开启
     v2c-activation:
       enabled: false
+  tbox-management:
+    # TBOX 后台运营查询（MPT，TSP-DSN-CR-009）：仅影响异常标签派生与查询/导出边界
+    activation-timeout: PT30M
+    long-offline-threshold: P30D
+    export-max-rows: 10000
+    default-page-size: 20
+    max-page-size: 200
 
 mybatis-plus:
   type-aliases-package: net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po

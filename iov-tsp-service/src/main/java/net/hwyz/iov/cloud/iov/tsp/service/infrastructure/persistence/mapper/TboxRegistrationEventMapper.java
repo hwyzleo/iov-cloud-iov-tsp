@@ -6,6 +6,8 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.util.List;
+
 /**
  * <p>
  * TBOX 注册激活事件消费幂等记录 DAO
@@ -40,6 +42,16 @@ public interface TboxRegistrationEventMapper {
             + "WHERE event_type = #{eventType} AND request_id = #{requestId} LIMIT 1")
     TboxRegistrationEventPo selectByEventTypeAndRequestId(@Param("eventType") String eventType,
                                                           @Param("requestId") String requestId);
+
+    /**
+     * 根据设备序列号查询消费记录（时间线组装，TSP-DSN-CR-009）
+     *
+     * @param deviceSn 设备序列号
+     * @return 消费记录列表（按事件发生时间升序）
+     */
+    @Select("SELECT " + COLUMNS + " FROM tb_tbox_registration_event WHERE device_sn = #{deviceSn} "
+            + "ORDER BY occurred_at ASC")
+    List<TboxRegistrationEventPo> selectByDeviceSn(@Param("deviceSn") String deviceSn);
 
     /**
      * 插入消费记录

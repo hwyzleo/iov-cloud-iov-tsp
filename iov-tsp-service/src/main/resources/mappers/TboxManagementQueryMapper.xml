@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.TboxManagementQueryMapper">
+
+    <!--
+      TSP-DSN-CR-009：MPT TBOX 运营聚合查询。
+      按 TBOX grain 聚合 active 绑定，避免一对多放大总数与重复行；
+      0 条 active 绑定 = UNBOUND，1 条 = BOUND，多条 = BINDING_CONFLICT（不随机选择 VIN）。
+    -->
+
+    <sql id="viewColumns">
+        t.id AS id,
+        t.sn AS sn,
+        t.no AS no,
+        t.config_word AS configWord,
+        t.supplier_code AS supplierCode,
+        t.hardware_ver AS hardwareVer,
+        t.software_ver AS softwareVer,
+        t.hardware_no AS hardwareNo,
+        t.software_no AS softwareNo,
+        t.hsm AS hsm,
+        t.device_status AS deviceStatus,
+        t.first_login_time AS firstLoginTime,
+        t.last_login_time AS lastLoginTime,
+        t.activate_time AS activateTime,
+        t.iccid1 AS iccid1,
+        t.iccid2 AS iccid2,
+        t.imei AS imei,
+        t.create_time AS createTime,
+        t.modify_time AS modifyTime,
+        COALESCE(b.bindCount, 0) AS bindCount,
+        CASE WHEN b.bindCount = 1 THEN b.vin END AS vin,
+        CASE WHEN b.bindCount = 1 THEN b.partCode END AS partCode,
+        CASE WHEN b.bindCount = 1 THEN b.vehicleNodeCode END AS vehicleNodeCode,
+        CASE WHEN b.bindCount = 1 THEN b.bindingId END AS bindingId,
+        CASE WHEN b.bindCount = 1 THEN b.bindingVersion END AS bindingVersion,
+        CASE WHEN b.bindCount = 1 THEN b.bindingUpdatedAt END AS bindingUpdatedAt
+    </sql>
+
+    <sql id="viewBody">
+        FROM tb_tbox t
+        LEFT JOIN (
+            SELECT sn,
+                   COUNT(*) AS bindCount,
+                   MAX(vin) AS vin,
+                   MAX(part_code) AS partCode,
+                   MAX(vehicle_node_code) AS vehicleNodeCode,
+                   MAX(binding_id) AS bindingId,
+                   MAX(binding_version) AS bindingVersion,
+                   MAX(last_event_time) AS bindingUpdatedAt
+            FROM tb_vehicle_tbox
+            WHERE device_category = 'TBOX'
+              AND bind_state = 'ACTIVE'
+              AND row_valid = 1
+            GROUP BY sn
+        ) b ON b.sn = t.sn
+        WHERE t.row_valid = 1
+    </sql>
+
+    <sql id="criteriaFilters">
+        <if test="sn != null and sn != ''">
+            AND t.sn = #{sn}
+        </if>
+        <if test="deviceStatus != null">
+            AND t.device_status = #{deviceStatus}
+        </if>
+        <if test="vin != null and vin != ''">
+            AND EXISTS (
+                SELECT 1 FROM tb_vehicle_tbox vb
+                WHERE vb.sn = t.sn
+                  AND vb.device_category = 'TBOX'
+                  AND vb.bind_state = 'ACTIVE'
+                  AND vb.row_valid = 1
+                  AND vb.vin = #{vin}
+            )
+        </if>
+        <if test="partCode != null and partCode != ''">
+            AND EXISTS (
+                SELECT 1 FROM tb_vehicle_tbox vb
+                WHERE vb.sn = t.sn
+                  AND vb.device_category = 'TBOX'
+                  AND vb.bind_state = 'ACTIVE'
+                  AND vb.row_valid = 1
+                  AND vb.part_code = #{partCode}
+            )
+        </if>
+        <if test="firstLoginFrom != null">
+            AND t.first_login_time &gt;= #{firstLoginFrom}
+        </if>
+        <if test="firstLoginTo != null">
+            AND t.first_login_time &lt;= #{firstLoginTo}
+        </if>
+        <if test="lastLoginFrom != null">
+            AND t.last_login_time &gt;= #{lastLoginFrom}
+        </if>
+        <if test="lastLoginTo != null">
+            AND t.last_login_time &lt;= #{lastLoginTo}
+        </if>
+        <if test="activateFrom != null">
+            AND t.activate_time &gt;= #{activateFrom}
+        </if>
+        <if test="activateTo != null">
+            AND t.activate_time &lt;= #{activateTo}
+        </if>
+        <if test="createdFrom != null">
+            AND t.create_time &gt;= #{createdFrom}
+        </if>
+        <if test="createdTo != null">
+            AND t.create_time &lt;= #{createdTo}
+        </if>
+        <if test="bindingStatus != null">
+            <choose>
+                <when test="bindingStatus == 'UNBOUND'">
+                    AND b.bindCount IS NULL
+                </when>
+                <when test="bindingStatus == 'BOUND'">
+                    AND b.bindCount = 1
+                </when>
+                <when test="bindingStatus == 'BINDING_CONFLICT'">
+                    AND b.bindCount &gt; 1
+                </when>
+            </choose>
+        </if>
+        <if test="anomalyType != null">
+            <choose>
+                <when test="anomalyType == 'BINDING_CONFLICT'">
+                    AND b.bindCount &gt; 1
+                </when>
+                <when test="anomalyType == 'FROZEN_OR_RETIRED'">
+                    AND t.device_status IN (3, 4)
+                </when>
+                <when test="anomalyType == 'ACTIVATION_TIMEOUT'">
+                    AND t.device_status = 5
+                    AND t.first_login_time IS NOT NULL
+                    AND t.first_login_time &lt; #{activationTimeoutBefore}
+                </when>
+                <when test="anomalyType == 'NEVER_ONLINE'">
+                    AND t.first_login_time IS NULL
+                </when>
+                <when test="anomalyType == 'LONG_OFFLINE'">
+                    AND t.last_login_time IS NOT NULL
+                    AND t.last_login_time &lt; #{longOfflineBefore}
+                </when>
+                <when test="anomalyType == 'UNBOUND'">
+                    AND b.bindCount IS NULL
+                </when>
+            </choose>
+        </if>
+    </sql>
+
+    <sql id="sortDirection">
+        <choose>
+            <when test="sortAsc">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </sql>
+
+    <sql id="sortClause">
+        ORDER BY
+        <choose>
+            <when test="sortBy == 'firstLoginTime'">
+                t.first_login_time IS NULL, t.first_login_time <include refid="sortDirection"/>
+            </when>
+            <when test="sortBy == 'activateTime'">
+                t.activate_time IS NULL, t.activate_time <include refid="sortDirection"/>
+            </when>
+            <when test="sortBy == 'createdAt'">
+                t.create_time IS NULL, t.create_time <include refid="sortDirection"/>
+            </when>
+            <when test="sortBy == 'updatedAt'">
+                t.modify_time IS NULL, t.modify_time <include refid="sortDirection"/>
+            </when>
+            <when test="sortBy == 'deviceStatus'">
+                t.device_status <include refid="sortDirection"/>
+            </when>
+            <otherwise>
+                t.last_login_time IS NULL, t.last_login_time <include refid="sortDirection"/>
+            </otherwise>
+        </choose>
+    </sql>
+
+    <select id="selectPageByCriteria"
+            parameterType="net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxManagementCriteria"
+            resultType="net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxManagementView">
+        SELECT <include refid="viewColumns"/>
+        <include refid="viewBody"/>
+        <include refid="criteriaFilters"/>
+        <include refid="sortClause"/>
+    </select>
+
+    <select id="selectBySn"
+            resultType="net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxManagementView">
+        SELECT <include refid="viewColumns"/>
+        <include refid="viewBody"/>
+        AND t.sn = #{sn}
+    </select>
+
+</mapper>
