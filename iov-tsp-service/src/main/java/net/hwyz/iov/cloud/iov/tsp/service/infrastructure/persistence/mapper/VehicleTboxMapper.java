@@ -42,4 +42,9 @@ public interface VehicleTboxMapper extends BaseDao<VehicleTboxPo, Long> {
      * 根据VIN和设备类别查询ACTIVE绑定列表（接入身份反查，不LIMIT以便检测绑定冲突）
      */
     List<VehicleTboxPo> selectActiveByVinAndCategory(@Param("vin") String vin, @Param("deviceCategory") String deviceCategory);
+
+    /**
+     * 根据SN和设备类别查询ACTIVE绑定列表（注册激活校验唯一绑定，不LIMIT以便检测绑定冲突）
+     */
+    List<VehicleTboxPo> selectActiveBySnAndCategory(@Param("sn") String sn, @Param("deviceCategory") String deviceCategory);
 }

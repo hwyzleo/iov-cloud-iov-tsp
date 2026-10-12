@@ -38,4 +38,12 @@ public interface VehicleTboxProjectionRepository {
      * 根据VIN查询该车辆当前 ACTIVE 的 TBOX 绑定投影列表（接入身份反查，检测绑定冲突用，不LIMIT）
      */
     List<VehicleTbox> listActiveTboxBindingsByVin(String vin);
+
+    /**
+     * 根据SN查询当前 ACTIVE 的 TBOX 绑定投影列表（注册激活校验唯一绑定用，不LIMIT）
+     *
+     * @param sn 设备序列号
+     * @return ACTIVE 绑定投影列表
+     */
+    List<VehicleTbox> listActiveTboxBindingsBySn(String sn);
 }

@@ -33,6 +33,10 @@ public class TboxResult {
 
     private LocalDateTime activateTime;
 
+    private LocalDateTime firstLoginTime;
+
+    private LocalDateTime lastLoginTime;
+
     private String iccid1;
 
     private String iccid2;

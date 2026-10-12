@@ -104,6 +104,18 @@ public class TboxPo extends BasePo {
     private LocalDateTime activateTime;
 
     /**
+     * 首次 mTLS + US-017 ALLOW 成功建链时间，set-once
+     */
+    @TableField("first_login_time")
+    private LocalDateTime firstLoginTime;
+
+    /**
+     * 最近一次成功建链时间，按 max(existing, event.ts) 单调更新
+     */
+    @TableField("last_login_time")
+    private LocalDateTime lastLoginTime;
+
+    /**
      * 集成电路卡识别码1
      */
     @TableField("iccid1")

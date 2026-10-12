@@ -35,14 +35,36 @@ public interface TboxMapper extends BaseDao<TboxPo, Long> {
     TboxPo selectByHsm(String hsm);
 
     /**
-     * 激活设备（幂等）
-     * 仅当 status=PRE_ACTIVE AND activate_time IS NULL 时更新
+     * 记录成功登录（幂等）
+     * first_login_time set-once；last_login_time 取 max(existing, ts)；
+     * PRE_ACTIVE -> ACTIVATING；ACTIVE 仅刷新 last_login_time；BLOCKED/RETIRED 不更新。
      *
-     * @param sn 设备序列号
-     * @param activateTime 激活时间
-     * @param newStatus 新状态
+     * @param hsmUid           规范设备身份（tb_tbox.hsm）
+     * @param ts               事件时间
+     * @param preActiveStatus  PRE_ACTIVE 码值
+     * @param activatingStatus ACTIVATING 码值
+     * @param activeStatus     ACTIVE 码值
      * @return 更新行数
      */
-    int activateDevice(@Param("sn") String sn, @Param("activateTime") LocalDateTime activateTime, @Param("newStatus") Integer newStatus);
+    int recordLogin(@Param("hsmUid") String hsmUid,
+                    @Param("ts") LocalDateTime ts,
+                    @Param("preActiveStatus") Integer preActiveStatus,
+                    @Param("activatingStatus") Integer activatingStatus,
+                    @Param("activeStatus") Integer activeStatus);
+
+    /**
+     * 完成业务激活（幂等）
+     * 仅当 device_status = ACTIVATING AND activate_time IS NULL 时更新为 ACTIVE 并写入 activate_time
+     *
+     * @param hsmUid           规范设备身份（tb_tbox.hsm）
+     * @param activateTime     激活时间
+     * @param activatingStatus ACTIVATING 码值
+     * @param activeStatus     ACTIVE 码值
+     * @return 更新行数
+     */
+    int completeActivation(@Param("hsmUid") String hsmUid,
+                           @Param("activateTime") LocalDateTime activateTime,
+                           @Param("activatingStatus") Integer activatingStatus,
+                           @Param("activeStatus") Integer activeStatus);
 
 }

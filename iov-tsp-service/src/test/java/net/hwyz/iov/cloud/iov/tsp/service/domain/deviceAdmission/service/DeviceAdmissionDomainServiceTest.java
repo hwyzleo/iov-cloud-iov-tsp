@@ -96,6 +96,22 @@ class DeviceAdmissionDomainServiceTest {
     }
 
     @Test
+    void checkAdmission_DeviceStatusActivating_ShouldReturnAllow() {
+        String hsm = "test-hsm-activating";
+        String vin = "test-vin-activating";
+
+        when(deviceAdmissionRepository.findByHsm(hsm))
+            .thenReturn(Optional.of(new DeviceAdmissionRepository.TboxInfo(vin, hsm, 5)));
+        when(certificateVerificationRepository.checkRevocation(hsm)).thenReturn(false);
+
+        DeviceAdmission result = deviceAdmissionDomainService.checkAdmission(hsm);
+
+        assertEquals(DeviceAdmissionResult.ALLOW, result.getAdmissionResult());
+        assertEquals(CheckStatus.PASS, result.getDeviceStatusCheckResult().getStatus());
+        verify(deviceAdmissionLogRepository).save(any(DeviceAdmission.class));
+    }
+
+    @Test
     void checkAdmission_PkiServiceUnavailable_ShouldReturnAllow() {
         String hsm = "test-hsm-123";
         String vin = "test-vin-456";

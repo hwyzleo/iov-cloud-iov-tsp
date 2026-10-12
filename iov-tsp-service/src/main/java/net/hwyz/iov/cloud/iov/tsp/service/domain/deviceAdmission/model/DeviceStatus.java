@@ -13,6 +13,7 @@ import lombok.Getter;
 public enum DeviceStatus {
 
     PRE_ACTIVE(1, "待激活"),
+    ACTIVATING(5, "激活中"),
     ACTIVE(2, "在役"),
     RETIRED(3, "报废"),
     BLOCKED(4, "冻结黑名单");

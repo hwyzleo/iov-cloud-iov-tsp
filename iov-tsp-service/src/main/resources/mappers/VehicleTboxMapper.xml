@@ -226,4 +226,16 @@
         AND bind_state = 'ACTIVE'
         AND row_valid = 1
     </select>
+
+    <!-- 根据SN和设备类别查询ACTIVE绑定列表（注册激活校验唯一绑定，不LIMIT以便检测绑定冲突） -->
+    <select id="selectActiveBySnAndCategory" resultMap="baseResultMap">
+        SELECT <include refid="baseColumnList"/>,
+               binding_id, part_code, vehicle_node_code, device_category, 
+               bind_state, binding_version, last_event_time, source
+        FROM tb_vehicle_tbox
+        WHERE sn = #{sn}
+        AND device_category = #{deviceCategory}
+        AND bind_state = 'ACTIVE'
+        AND row_valid = 1
+    </select>
 </mapper>

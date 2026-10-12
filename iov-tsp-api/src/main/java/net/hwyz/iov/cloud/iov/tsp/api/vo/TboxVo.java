@@ -69,6 +69,16 @@ public class TboxVo {
     private LocalDateTime activateTime;
 
     /**
+     * 首次成功建链时间
+     */
+    private LocalDateTime firstLoginTime;
+
+    /**
+     * 最近一次成功建链时间
+     */
+    private LocalDateTime lastLoginTime;
+
+    /**
      * 集成电路卡识别码1
      */
     private String iccid1;

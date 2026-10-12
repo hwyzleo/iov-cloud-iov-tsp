@@ -26,6 +26,7 @@ public class DeviceAdmissionDomainService {
 
     private static final Set<DeviceStatus> ADMISSION_ALLOWED_STATUSES = Set.of(
         DeviceStatus.PRE_ACTIVE,
+        DeviceStatus.ACTIVATING,
         DeviceStatus.ACTIVE
     );
 
