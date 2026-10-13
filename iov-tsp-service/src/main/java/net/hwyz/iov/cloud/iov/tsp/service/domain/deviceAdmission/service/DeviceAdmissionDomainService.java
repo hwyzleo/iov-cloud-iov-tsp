@@ -2,20 +2,35 @@ package net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.CheckStatus;
+import net.hwyz.iov.cloud.iov.tsp.service.common.exception.CertificateDependencyUnavailableException;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.DigestUtils;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.HsmUidNormalizer;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.AdmissionReason;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.BindStatus;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.CertificateIdentity;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.CertificateStatus;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.CertificateVerification;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceAdmission;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceAdmissionCommand;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceAdmissionResult;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceStatus;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.CertificateVerificationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.DeviceAdmissionLogRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.DeviceAdmissionRepository;
-import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.CertificateVerificationRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * 设备接入鉴权领域服务
+ * 设备接入鉴权领域服务（TSP-DSN-CR-011）
+ * <p>
+ * 编排顺序固定为：UID → 绑定 → 证书吊销/有效期 → 设备生命周期态 → 裁决。
+ * 安全结论：任何无法获得确定 VALID/REVOKED 的 PKI 依赖结果一律 fail-closed
+ * （DENY + DEPENDENCY_UNAVAILABLE），不得降级为 ALLOW。
  *
  * @author hwyz_leo
  */
@@ -25,224 +40,228 @@ import java.util.concurrent.CompletableFuture;
 public class DeviceAdmissionDomainService {
 
     private static final Set<DeviceStatus> ADMISSION_ALLOWED_STATUSES = Set.of(
-        DeviceStatus.PRE_ACTIVE,
-        DeviceStatus.ACTIVATING,
-        DeviceStatus.ACTIVE
+            DeviceStatus.PRE_ACTIVE,
+            DeviceStatus.ACTIVATING,
+            DeviceStatus.ACTIVE
     );
 
-    private static final Set<DeviceStatus> ADMISSION_DENIED_STATUSES = Set.of(
-        DeviceStatus.RETIRED,
-        DeviceStatus.BLOCKED
-    );
+    private static final String CHECK_PASS = "PASS";
+    private static final String CHECK_FAIL = "FAIL";
+    private static final String OUTCOME_OK = "OK";
+    private static final String OUTCOME_DEVICE_STATUS_INVALID = "DEVICE_STATUS_INVALID";
 
     private final DeviceAdmissionRepository deviceAdmissionRepository;
     private final DeviceAdmissionLogRepository deviceAdmissionLogRepository;
     private final CertificateVerificationRepository certificateVerificationRepository;
 
     /**
-     * 执行设备接入鉴权检查
-     * @param hsm 设备HSM标识
-     * @return 设备接入鉴权结果
+     * 执行设备接入准入裁决
+     *
+     * @param command 裁决命令（必须携带本次 mTLS 叶子证书 DER）
+     * @return 裁决结果（已落审计）
      */
-    public DeviceAdmission checkAdmission(String hsm) {
+    public DeviceAdmission decide(DeviceAdmissionCommand command) {
         long startTime = System.currentTimeMillis();
+        Instant decisionAt = command.occurredAt() == null ? Instant.now() : command.occurredAt();
+        String uidDigest = DigestUtils.sha256Hex(command.uid());
+        String certSerialDigest = DigestUtils.sha256Hex(command.certSerial());
+        String sourceIpDigest = DigestUtils.sha256Hex(command.sourceIp());
 
-        CompletableFuture<DeviceAdmission.CheckResult> hsmCheckFuture =
-            CompletableFuture.supplyAsync(() -> checkHsmBinding(hsm));
+        DeviceAdmission admission = evaluate(command, decisionAt);
+        admission.setUidDigest(uidDigest);
+        admission.setCertSerialDigest(certSerialDigest);
+        admission.setSourceIpDigest(sourceIpDigest);
+        admission.setCaller(command.caller());
+        admission.setResponseTimeMs(System.currentTimeMillis() - startTime);
+        admission.setCreateTime(LocalDateTime.now());
 
-        CompletableFuture<DeviceAdmission.CheckResult> pkiCheckFuture =
-            CompletableFuture.supplyAsync(() -> checkPkiRevocation(hsm));
+        deviceAdmissionLogRepository.save(admission);
 
-        CompletableFuture<DeviceAdmission.CheckResult> deviceStatusCheckFuture =
-            CompletableFuture.supplyAsync(() -> checkDeviceStatus(hsm));
+        log.info("设备接入准入裁决完成: uidDigest={}, decision={}, reason={}, certStatus={}, time={}ms",
+                uidDigest, admission.getAdmissionResult().getCode(), admission.getReason(),
+                admission.getCertStatus(), admission.getResponseTimeMs());
 
-        CompletableFuture.allOf(hsmCheckFuture, pkiCheckFuture, deviceStatusCheckFuture).join();
-
-        DeviceAdmission.CheckResult hsmCheckResult = hsmCheckFuture.join();
-        DeviceAdmission.CheckResult pkiCheckResult = pkiCheckFuture.join();
-        DeviceAdmission.CheckResult deviceStatusCheckResult = deviceStatusCheckFuture.join();
-
-        DeviceAdmissionResult admissionResult = aggregateResults(hsmCheckResult, pkiCheckResult, deviceStatusCheckResult);
-        String reason = generateReason(admissionResult, hsmCheckResult, pkiCheckResult, deviceStatusCheckResult);
-
-        // 从HSM绑定检查结果中获取解析的VIN，如果为null则使用UNKNOWN
-        String vin = hsmCheckResult.getVin();
-        if (vin == null || vin.isEmpty()) {
-            vin = "UNKNOWN";
-        }
-
-        long responseTimeMs = System.currentTimeMillis() - startTime;
-
-        DeviceAdmission deviceAdmission = DeviceAdmission.builder()
-            .vin(vin)
-            .hsm(hsm)
-            .admissionResult(admissionResult)
-            .reason(reason)
-            .hsmCheckResult(hsmCheckResult)
-            .pkiCheckResult(pkiCheckResult)
-            .deviceStatusCheckResult(deviceStatusCheckResult)
-            .responseTimeMs(responseTimeMs)
-            .build();
-
-        deviceAdmissionLogRepository.save(deviceAdmission);
-
-        log.info("设备接入鉴权检查完成: hsm={}, vin={}, result={}, reason={}, time={}ms",
-            hsm, vin, admissionResult.getCode(), reason, responseTimeMs);
-
-        return deviceAdmission;
+        return admission;
     }
 
-    private DeviceAdmission.CheckResult checkHsmBinding(String hsm) {
+    /**
+     * 按固定顺序执行各项判定；任一项失败立即 fail-closed 返回。
+     */
+    private DeviceAdmission evaluate(DeviceAdmissionCommand command, Instant decisionAt) {
+        // 1. UID 必须存在（不存在不调用 PKI）
+        String uid = HsmUidNormalizer.normalize(command.uid());
+        Optional<DeviceAdmissionRepository.TboxInfo> tboxOptional = uid == null
+                ? Optional.empty()
+                : deviceAdmissionRepository.findByHsm(uid);
+        if (tboxOptional.isEmpty()) {
+            return deny(AdmissionReason.UID_UNKNOWN, null)
+                    .bindStatus(BindStatus.UNKNOWN)
+                    .uidCheckResult(CHECK_FAIL)
+                    .dependencyOutcome(AdmissionReason.UID_UNKNOWN.name())
+                    .build();
+        }
+        DeviceAdmissionRepository.TboxInfo tbox = tboxOptional.get();
+
+        // 2. 绑定必须唯一 ACTIVE（未绑定/冲突不调用 PKI）
+        List<DeviceAdmissionRepository.BindingInfo> bindings =
+                deviceAdmissionRepository.findActiveBindingsBySn(tbox.sn());
+        if (bindings.isEmpty()) {
+            return deny(AdmissionReason.UNBOUND, null)
+                    .bindStatus(BindStatus.UNBOUND)
+                    .uidCheckResult(CHECK_PASS)
+                    .dependencyOutcome(AdmissionReason.UNBOUND.name())
+                    .build();
+        }
+        if (bindings.size() > 1) {
+            return deny(AdmissionReason.BINDING_CONFLICT, null)
+                    .bindStatus(BindStatus.CONFLICT)
+                    .uidCheckResult(CHECK_PASS)
+                    .dependencyOutcome(AdmissionReason.BINDING_CONFLICT.name())
+                    .build();
+        }
+        DeviceAdmissionRepository.BindingInfo binding = bindings.get(0);
+
+        // 3. 证书吊销 + 有效期冗余兜底
+        long pkiStart = System.currentTimeMillis();
+        CertificateVerification verification;
         try {
-            var tboxInfo = deviceAdmissionRepository.findByHsm(hsm);
-
-            if (tboxInfo.isEmpty()) {
-                return DeviceAdmission.CheckResult.builder()
-                    .status(CheckStatus.FAIL)
-                    .message("HSM绑定关系未找到")
+            verification = certificateVerificationRepository.verify(
+                    new CertificateIdentity(command.certSerial(), command.certFingerprint(), command.leafCertificateDer()),
+                    decisionAt);
+        } catch (CertificateDependencyUnavailableException e) {
+            log.warn("PKI 证书状态查询依赖不可用，fail-closed: uidDigest={}, category={}",
+                    DigestUtils.sha256Hex(command.uid()), e.getCategory());
+            return deny(AdmissionReason.DEPENDENCY_UNAVAILABLE, null)
+                    .bindStatus(BindStatus.BOUND)
+                    .certStatus(CertificateStatus.UNKNOWN)
+                    .uidCheckResult(CHECK_PASS)
+                    .pkiLatencyMs(System.currentTimeMillis() - pkiStart)
+                    .dependencyOutcome(e.getCategory())
                     .build();
-            }
-
-            String vin = tboxInfo.get().vin();
-            if (vin == null || vin.isEmpty()) {
-                return DeviceAdmission.CheckResult.builder()
-                    .status(CheckStatus.FAIL)
-                    .message("HSM未绑定VIN")
-                    .build();
-            }
-
-            return DeviceAdmission.CheckResult.builder()
-                .status(CheckStatus.PASS)
-                .message("HSM绑定检查通过")
-                .vin(vin)
-                .build();
-        } catch (Exception e) {
-            log.error("HSM绑定检查异常", e);
-            return DeviceAdmission.CheckResult.builder()
-                .status(CheckStatus.ERROR)
-                .message("HSM绑定检查异常: " + e.getMessage())
-                .build();
         }
+        long pkiLatencyMs = System.currentTimeMillis() - pkiStart;
+
+        if (verification.status() == CertificateStatus.REVOKED) {
+            return deny(AdmissionReason.CERT_REVOKED, binding)
+                    .certStatus(CertificateStatus.REVOKED)
+                    .checkedAt(verification.checkedAt())
+                    .revocationSource(verification.source())
+                    .uidCheckResult(CHECK_PASS)
+                    .pkiLatencyMs(pkiLatencyMs)
+                    .dependencyOutcome(OUTCOME_OK)
+                    .build();
+        }
+        if (verification.status() == CertificateStatus.UNKNOWN) {
+            return deny(AdmissionReason.DEPENDENCY_UNAVAILABLE, binding)
+                    .certStatus(CertificateStatus.UNKNOWN)
+                    .checkedAt(verification.checkedAt())
+                    .revocationSource(verification.source())
+                    .uidCheckResult(CHECK_PASS)
+                    .pkiLatencyMs(pkiLatencyMs)
+                    .dependencyOutcome(CertificateDependencyUnavailableException.CATEGORY_UNKNOWN)
+                    .build();
+        }
+        if (verification.notAfter() != null && decisionAt.isAfter(verification.notAfter())) {
+            return deny(AdmissionReason.CERT_EXPIRED, binding)
+                    .certStatus(CertificateStatus.EXPIRED)
+                    .checkedAt(verification.checkedAt())
+                    .revocationSource(verification.source())
+                    .uidCheckResult(CHECK_PASS)
+                    .pkiLatencyMs(pkiLatencyMs)
+                    .dependencyOutcome(OUTCOME_OK)
+                    .build();
+        }
+
+        // 4. 设备生命周期准入态（不得被 PKI 结果覆盖为 ALLOW）
+        DeviceStatus deviceStatus = mapDeviceStatus(tbox.deviceStatus());
+        if (deviceStatus == DeviceStatus.BLOCKED) {
+            return deny(AdmissionReason.DEVICE_BLOCKED, binding)
+                    .deviceStatus(DeviceStatus.BLOCKED)
+                    .certStatus(CertificateStatus.VALID)
+                    .checkedAt(verification.checkedAt())
+                    .revocationSource(verification.source())
+                    .uidCheckResult(CHECK_PASS)
+                    .deviceStatusCheckResult(CHECK_FAIL)
+                    .pkiLatencyMs(pkiLatencyMs)
+                    .dependencyOutcome(OUTCOME_OK)
+                    .build();
+        }
+        if (deviceStatus == DeviceStatus.RETIRED) {
+            return deny(AdmissionReason.DEVICE_RETIRED, binding)
+                    .deviceStatus(DeviceStatus.RETIRED)
+                    .certStatus(CertificateStatus.VALID)
+                    .checkedAt(verification.checkedAt())
+                    .revocationSource(verification.source())
+                    .uidCheckResult(CHECK_PASS)
+                    .deviceStatusCheckResult(CHECK_FAIL)
+                    .pkiLatencyMs(pkiLatencyMs)
+                    .dependencyOutcome(OUTCOME_OK)
+                    .build();
+        }
+        if (deviceStatus == null || !ADMISSION_ALLOWED_STATUSES.contains(deviceStatus)) {
+            return deny(AdmissionReason.DEPENDENCY_UNAVAILABLE, binding)
+                    .certStatus(CertificateStatus.VALID)
+                    .checkedAt(verification.checkedAt())
+                    .revocationSource(verification.source())
+                    .uidCheckResult(CHECK_PASS)
+                    .deviceStatusCheckResult(CHECK_FAIL)
+                    .pkiLatencyMs(pkiLatencyMs)
+                    .dependencyOutcome(OUTCOME_DEVICE_STATUS_INVALID)
+                    .build();
+        }
+
+        // 5. 全部通过
+        Instant updatedAt = maxInstant(binding.lastEventTime(), tbox.modifyTime(), verification.checkedAt());
+        return DeviceAdmission.builder()
+                .vin(binding.vin())
+                .admissionResult(DeviceAdmissionResult.ALLOW)
+                .reason(AdmissionReason.NONE)
+                .bindStatus(BindStatus.BOUND)
+                .certStatus(CertificateStatus.VALID)
+                .deviceStatus(deviceStatus)
+                .bindVersion(binding.bindingVersion())
+                .updatedAt(updatedAt)
+                .checkedAt(verification.checkedAt())
+                .revocationSource(verification.source())
+                .uidCheckResult(CHECK_PASS)
+                .deviceStatusCheckResult(CHECK_PASS)
+                .pkiLatencyMs(pkiLatencyMs)
+                .dependencyOutcome(OUTCOME_OK)
+                .build();
     }
 
-    private DeviceAdmission.CheckResult checkPkiRevocation(String hsm) {
+    private DeviceAdmission.DeviceAdmissionBuilder deny(AdmissionReason reason, DeviceAdmissionRepository.BindingInfo binding) {
+        DeviceAdmission.DeviceAdmissionBuilder builder = DeviceAdmission.builder()
+                .admissionResult(DeviceAdmissionResult.DENY)
+                .reason(reason);
+        if (binding != null) {
+            builder.vin(binding.vin());
+            builder.bindVersion(binding.bindingVersion());
+        }
+        return builder;
+    }
+
+    /**
+     * 设备状态码映射；未知/空返回 null 由调用方 fail-closed 处理。
+     */
+    private static DeviceStatus mapDeviceStatus(Integer code) {
+        if (code == null) {
+            return null;
+        }
         try {
-            boolean isRevoked = certificateVerificationRepository.checkRevocation(hsm);
-
-            if (isRevoked) {
-                return DeviceAdmission.CheckResult.builder()
-                    .status(CheckStatus.FAIL)
-                    .message("证书已被吊销")
-                    .build();
-            }
-
-            return DeviceAdmission.CheckResult.builder()
-                .status(CheckStatus.PASS)
-                .message("PKI吊销检查通过")
-                .build();
-        } catch (Exception e) {
-            log.warn("PKI服务不可用，允许接入", e);
-            return DeviceAdmission.CheckResult.builder()
-                .status(CheckStatus.PASS)
-                .message("PKI服务不可用，允许接入")
-                .build();
+            return DeviceStatus.fromCode(code);
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 
-    private DeviceAdmission.CheckResult checkDeviceStatus(String hsm) {
-        try {
-            var tboxInfo = deviceAdmissionRepository.findByHsm(hsm);
-
-            if (tboxInfo.isEmpty()) {
-                return DeviceAdmission.CheckResult.builder()
-                    .status(CheckStatus.FAIL)
-                    .message("设备未找到")
-                    .build();
+    private static Instant maxInstant(Instant... values) {
+        Instant max = null;
+        for (Instant value : values) {
+            if (value != null && (max == null || value.isAfter(max))) {
+                max = value;
             }
-
-            Integer deviceStatusCode = tboxInfo.get().deviceStatus();
-            if (deviceStatusCode == null) {
-                return DeviceAdmission.CheckResult.builder()
-                    .status(CheckStatus.FAIL)
-                    .message("设备状态未设置")
-                    .build();
-            }
-
-            DeviceStatus status = DeviceStatus.fromCode(deviceStatusCode);
-
-            if (ADMISSION_DENIED_STATUSES.contains(status)) {
-                return DeviceAdmission.CheckResult.builder()
-                    .status(CheckStatus.FAIL)
-                    .message("设备状态不允许接入: " + status.getDesc())
-                    .build();
-            }
-
-            if (!ADMISSION_ALLOWED_STATUSES.contains(status)) {
-                return DeviceAdmission.CheckResult.builder()
-                    .status(CheckStatus.FAIL)
-                    .message("设备状态无效: " + status.getDesc())
-                    .build();
-            }
-
-            return DeviceAdmission.CheckResult.builder()
-                .status(CheckStatus.PASS)
-                .message("设备状态检查通过")
-                .build();
-        } catch (Exception e) {
-            log.error("设备状态检查异常", e);
-            return DeviceAdmission.CheckResult.builder()
-                .status(CheckStatus.ERROR)
-                .message("设备状态检查异常: " + e.getMessage())
-                .build();
         }
-    }
-
-    private DeviceAdmissionResult aggregateResults(
-            DeviceAdmission.CheckResult hsmCheck,
-            DeviceAdmission.CheckResult pkiCheck,
-            DeviceAdmission.CheckResult deviceStatusCheck) {
-
-        if (hsmCheck.getStatus() == CheckStatus.FAIL ||
-            hsmCheck.getStatus() == CheckStatus.ERROR) {
-            return DeviceAdmissionResult.DENY;
-        }
-
-        if (pkiCheck.getStatus() == CheckStatus.FAIL) {
-            return DeviceAdmissionResult.DENY;
-        }
-
-        if (deviceStatusCheck.getStatus() == CheckStatus.FAIL ||
-            deviceStatusCheck.getStatus() == CheckStatus.ERROR) {
-            return DeviceAdmissionResult.DENY;
-        }
-
-        return DeviceAdmissionResult.ALLOW;
-    }
-
-    private String generateReason(
-            DeviceAdmissionResult result,
-            DeviceAdmission.CheckResult hsmCheck,
-            DeviceAdmission.CheckResult pkiCheck,
-            DeviceAdmission.CheckResult deviceStatusCheck) {
-
-        if (result == DeviceAdmissionResult.ALLOW) {
-            return "所有检查通过";
-        }
-
-        StringBuilder reason = new StringBuilder();
-
-        if (hsmCheck.getStatus() != CheckStatus.PASS) {
-            reason.append("HSM绑定检查: ").append(hsmCheck.getMessage()).append("; ");
-        }
-
-        if (pkiCheck.getStatus() != CheckStatus.PASS) {
-            reason.append("PKI吊销检查: ").append(pkiCheck.getMessage()).append("; ");
-        }
-
-        if (deviceStatusCheck.getStatus() != CheckStatus.PASS) {
-            reason.append("设备状态检查: ").append(deviceStatusCheck.getMessage()).append("; ");
-        }
-
-        return reason.toString().trim();
+        return max;
     }
 }

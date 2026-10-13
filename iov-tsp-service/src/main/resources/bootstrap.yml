@@ -28,3 +28,5 @@ spring:
           - mysql.yaml
           - redis.yaml
           - kafka.yaml
+          # TSP-DSN-CR-011：设备接入 PKI 吐销查询统一使用 crypto.pki.*（不加载 kms.yaml）
+          - pki.yaml

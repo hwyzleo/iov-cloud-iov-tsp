@@ -12,6 +12,13 @@
         <result column="hsm_check_result" property="hsmCheckResult" />
         <result column="pki_check_result" property="pkiCheckResult" />
         <result column="device_status_check_result" property="deviceStatusCheckResult" />
+        <result column="uid_digest" property="uidDigest" />
+        <result column="cert_serial_digest" property="certSerialDigest" />
+        <result column="source_ip_digest" property="sourceIpDigest" />
+        <result column="checked_at" property="checkedAt" />
+        <result column="revocation_source" property="revocationSource" />
+        <result column="dependency_outcome" property="dependencyOutcome" />
+        <result column="caller" property="caller" />
         <result column="request_context" property="requestContext" />
         <result column="response_time_ms" property="responseTimeMs" />
         <result column="description" property="description" />
@@ -25,18 +32,24 @@
 
     <!-- 通用查询结果列 -->
     <sql id="baseColumnList">
-        id, vin, hsm, admission_result, reason, hsm_check_result, pki_check_result, device_status_check_result, request_context, response_time_ms,
+        id, vin, hsm, admission_result, reason, hsm_check_result, pki_check_result, device_status_check_result,
+        uid_digest, cert_serial_digest, source_ip_digest, checked_at, revocation_source, dependency_outcome, caller,
+        request_context, response_time_ms,
         description, create_time, create_by, modify_time, modify_by, row_version, row_valid
     </sql>
 
     <!-- 插入 -->
     <insert id="insertPo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO tb_device_admission_log (
-            id, vin, hsm, admission_result, reason, hsm_check_result, pki_check_result, device_status_check_result, request_context, response_time_ms,
+            id, vin, hsm, admission_result, reason, hsm_check_result, pki_check_result, device_status_check_result,
+            uid_digest, cert_serial_digest, source_ip_digest, checked_at, revocation_source, dependency_outcome, caller,
+            request_context, response_time_ms,
             description, create_time, create_by, modify_time, modify_by, row_version, row_valid
         )
         VALUES (
-            #{id}, #{vin}, #{hsm}, #{admissionResult}, #{reason}, #{hsmCheckResult}, #{pkiCheckResult}, #{deviceStatusCheckResult}, #{requestContext}, #{responseTimeMs},
+            #{id}, #{vin}, NULL, #{admissionResult}, #{reason}, #{hsmCheckResult}, #{pkiCheckResult}, #{deviceStatusCheckResult},
+            #{uidDigest}, #{certSerialDigest}, #{sourceIpDigest}, #{checkedAt}, #{revocationSource}, #{dependencyOutcome}, #{caller},
+            #{requestContext}, #{responseTimeMs},
             #{description}, now(), #{createBy}, now(), #{modifyBy}, 1, 1
         )
     </insert>
@@ -44,13 +57,17 @@
     <!-- 批量插入 -->
     <insert id="batchInsertPo" useGeneratedKeys="true" keyProperty="id" parameterType="java.util.List">
         INSERT INTO tb_device_admission_log (
-            id, vin, hsm, admission_result, reason, hsm_check_result, pki_check_result, device_status_check_result, request_context, response_time_ms,
+            id, vin, hsm, admission_result, reason, hsm_check_result, pki_check_result, device_status_check_result,
+            uid_digest, cert_serial_digest, source_ip_digest, checked_at, revocation_source, dependency_outcome, caller,
+            request_context, response_time_ms,
             description, create_time, create_by, modify_time, modify_by, row_version, row_valid
         )
         VALUES
         <foreach collection="list" item="item" index="index" separator=",">
         (
-            #{item.id}, #{item.vin}, #{item.hsm}, #{item.admissionResult}, #{item.reason}, #{item.hsmCheckResult}, #{item.pkiCheckResult}, #{item.deviceStatusCheckResult}, #{item.requestContext}, #{item.responseTimeMs},
+            #{item.id}, #{item.vin}, NULL, #{item.admissionResult}, #{item.reason}, #{item.hsmCheckResult}, #{item.pkiCheckResult}, #{item.deviceStatusCheckResult},
+            #{item.uidDigest}, #{item.certSerialDigest}, #{item.sourceIpDigest}, #{item.checkedAt}, #{item.revocationSource}, #{item.dependencyOutcome}, #{item.caller},
+            #{item.requestContext}, #{item.responseTimeMs},
             #{item.description}, now(), #{item.createBy}, now(), #{item.modifyBy}, 1, 1
         )
         </foreach>
@@ -79,6 +96,27 @@
         </if>
         <if test="deviceStatusCheckResult != null and deviceStatusCheckResult != ''">
             t.device_status_check_result = #{deviceStatusCheckResult},
+        </if>
+        <if test="uidDigest != null and uidDigest != ''">
+            t.uid_digest = #{uidDigest},
+        </if>
+        <if test="certSerialDigest != null and certSerialDigest != ''">
+            t.cert_serial_digest = #{certSerialDigest},
+        </if>
+        <if test="sourceIpDigest != null and sourceIpDigest != ''">
+            t.source_ip_digest = #{sourceIpDigest},
+        </if>
+        <if test="checkedAt != null">
+            t.checked_at = #{checkedAt},
+        </if>
+        <if test="revocationSource != null and revocationSource != ''">
+            t.revocation_source = #{revocationSource},
+        </if>
+        <if test="dependencyOutcome != null and dependencyOutcome != ''">
+            t.dependency_outcome = #{dependencyOutcome},
+        </if>
+        <if test="caller != null and caller != ''">
+            t.caller = #{caller},
         </if>
         <if test="requestContext != null and requestContext != ''">
             t.request_context = #{requestContext},

@@ -40,6 +40,12 @@
             <groupId>net.hwyz.iov.cloud.framework</groupId>
             <artifactId>framework-kafka-starter</artifactId>
         </dependency>
+
+        <!-- 框架: Security（PKI 证书状态/吐销查询，TSP-DSN-CR-011） -->
+        <dependency>
+            <groupId>net.hwyz.iov.cloud.framework</groupId>
+            <artifactId>framework-security-starter</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

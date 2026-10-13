@@ -4,11 +4,15 @@ import lombok.extern.slf4j.Slf4j;
 import net.hwyz.iov.cloud.iov.tsp.api.service.TspDeviceAdmissionService;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionCheckVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionResultVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.AdmissionDecision;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.AdmissionReason;
 import org.springframework.cloud.openfeign.FallbackFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * 设备接入鉴权服务降级处理
+ * 设备接入准入裁决服务降级处理（TSP-DSN-CR-011 §10）
+ * <p>
+ * 一律 fail-closed：DENY + DEPENDENCY_UNAVAILABLE，不得降级为 ALLOW。
  *
  * @author hwyz_leo
  */
@@ -20,12 +24,12 @@ public class TspDeviceAdmissionServiceFallbackFactory implements FallbackFactory
     public TspDeviceAdmissionService create(Throwable cause) {
         return new TspDeviceAdmissionService() {
             @Override
-            public DeviceAdmissionResultVo checkDeviceAdmission(DeviceAdmissionCheckVo checkVo) {
-                log.error("设备接入鉴权检查调用失败: hsm={}", checkVo.getHsm(), cause);
-                DeviceAdmissionResultVo result = new DeviceAdmissionResultVo();
-                result.setAdmission("DENY");
-                result.setReason("服务不可用: " + cause.getMessage());
-                return result;
+            public DeviceAdmissionResultVo decide(DeviceAdmissionCheckVo request) {
+                log.error("设备接入准入裁决调用失败，fail-closed 拒绝", cause);
+                return DeviceAdmissionResultVo.builder()
+                        .decision(AdmissionDecision.DENY)
+                        .reason(AdmissionReason.DEPENDENCY_UNAVAILABLE)
+                        .build();
             }
         };
     }

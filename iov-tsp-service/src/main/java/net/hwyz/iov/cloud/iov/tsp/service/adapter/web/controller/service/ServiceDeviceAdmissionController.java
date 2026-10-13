@@ -15,7 +15,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 设备接入鉴权控制器
+ * 设备接入准入裁决控制器（TSP-DSN-CR-011 §4.1）
+ * <p>
+ * canonical 端点为 {@code POST /decide}；旧 {@code /check} 仅作迁移期 deprecated 别名，
+ * 语义与 /decide 完全一致（缺少叶子证书时同样 fail-closed），不构成允许接入的兼容回退。
  *
  * @author hwyz_leo
  */
@@ -25,16 +28,32 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping(value = "/api/service/deviceAdmission/v1")
 public class ServiceDeviceAdmissionController {
 
+    /** 调用方标识（审计） **/
+    private static final String CALLER_VAGW = "VAGW";
+
     private final DeviceAdmissionAppService deviceAdmissionAppService;
 
     /**
-     * 设备接入鉴权检查
+     * 设备接入准入裁决
      */
-    @PostMapping("/check")
-    public DeviceAdmissionResultVo checkDeviceAdmission(@RequestBody @Validated DeviceAdmissionCheckVo checkVo) {
-        log.info("设备接入鉴权检查: hsm={}", checkVo.getHsm());
-        DeviceAdmissionCheckCmd cmd = DeviceAdmissionVoAssembler.INSTANCE.toCmd(checkVo);
-        DeviceAdmissionCheckResult result = deviceAdmissionAppService.checkAdmission(cmd);
+    @PostMapping("/decide")
+    public DeviceAdmissionResultVo decide(@RequestBody @Validated DeviceAdmissionCheckVo request) {
+        log.info("设备接入准入裁决请求: uidDigest={}", digest(request.getUid()));
+        DeviceAdmissionCheckCmd cmd = DeviceAdmissionVoAssembler.INSTANCE.toCmd(request);
+        DeviceAdmissionCheckResult result = deviceAdmissionAppService.decide(cmd, CALLER_VAGW);
         return DeviceAdmissionVoAssembler.INSTANCE.toVo(result);
+    }
+
+    /**
+     * 设备接入准入裁决（迁移期 deprecated 别名，与 /decide 语义一致）
+     */
+    @Deprecated
+    @PostMapping("/check")
+    public DeviceAdmissionResultVo check(@RequestBody @Validated DeviceAdmissionCheckVo request) {
+        return decide(request);
+    }
+
+    private static String digest(String value) {
+        return net.hwyz.iov.cloud.iov.tsp.service.common.util.DigestUtils.sha256Hex(value);
     }
 }

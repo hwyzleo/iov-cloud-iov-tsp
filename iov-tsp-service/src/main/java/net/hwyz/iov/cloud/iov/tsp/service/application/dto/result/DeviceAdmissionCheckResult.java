@@ -4,9 +4,18 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.AdmissionDecision;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.AdmissionReason;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindStatus;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.CertificateStatus;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.DeviceStatus;
+
+import java.time.Instant;
 
 /**
- * 设备接入鉴权检查结果
+ * 设备接入准入裁决结果（TSP-DSN-CR-011 §4.3）
+ *
+ * @author hwyz_leo
  */
 @Data
 @Builder
@@ -14,32 +23,19 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class DeviceAdmissionCheckResult {
 
-    private String admission;
-    private String reason;
+    private AdmissionDecision decision;
+
+    private AdmissionReason reason;
+
     private String vin;
-    private String bindStatus;
-    private String certStatus;
-    private String deviceStatus;
-    private String bindVersion;
-    private String updatedAt;
-    private CheckDetails checkDetails;
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CheckDetails {
-        private CheckResult hsmCheck;
-        private CheckResult pkiCheck;
-        private CheckResult deviceStatusCheck;
-    }
+    private BindStatus bindStatus;
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CheckResult {
-        private String status;
-        private String message;
-    }
+    private CertificateStatus certStatus;
+
+    private DeviceStatus deviceStatus;
+
+    private Long bindVersion;
+
+    private Instant updatedAt;
 }

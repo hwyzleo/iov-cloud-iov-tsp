@@ -6,10 +6,11 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
 /**
- * 设备接入鉴权转换器
+ * 设备接入鉴权转换器（TSP-DSN-CR-011 §9/§10）
+ * <p>
+ * 审计只落不可逆摘要；旧列 hsm 不再写入明文。
  *
  * @author hwyz_leo
- * @since 2025-05-14
  */
 @Mapper(componentModel = "spring")
 public interface DeviceAdmissionConverter {
@@ -21,9 +22,13 @@ public interface DeviceAdmissionConverter {
      * @return 日志持久化对象
      */
     @Mapping(target = "admissionResult", expression = "java(deviceAdmission.getAdmissionResult() != null ? deviceAdmission.getAdmissionResult().getCode() : null)")
-    @Mapping(target = "hsmCheckResult", expression = "java(deviceAdmission.getHsmCheckResult() != null ? deviceAdmission.getHsmCheckResult().getStatus().getCode() : null)")
-    @Mapping(target = "pkiCheckResult", expression = "java(deviceAdmission.getPkiCheckResult() != null ? deviceAdmission.getPkiCheckResult().getStatus().getCode() : null)")
-    @Mapping(target = "deviceStatusCheckResult", expression = "java(deviceAdmission.getDeviceStatusCheckResult() != null ? deviceAdmission.getDeviceStatusCheckResult().getStatus().getCode() : null)")
+    @Mapping(target = "reason", expression = "java(deviceAdmission.getReason() != null ? deviceAdmission.getReason().name() : null)")
+    @Mapping(target = "hsmCheckResult", source = "uidCheckResult")
+    @Mapping(target = "pkiCheckResult", expression = "java(deviceAdmission.getCertStatus() != null ? deviceAdmission.getCertStatus().name() : null)")
+    @Mapping(target = "deviceStatusCheckResult", source = "deviceStatusCheckResult")
+    @Mapping(target = "hsm", ignore = true)
     @Mapping(target = "responseTimeMs", expression = "java(deviceAdmission.getResponseTimeMs() != null ? deviceAdmission.getResponseTimeMs().intValue() : null)")
+    @Mapping(target = "createBy", ignore = true)
+    @Mapping(target = "modifyBy", ignore = true)
     DeviceAdmissionLogPo toLogPo(DeviceAdmission deviceAdmission);
 }

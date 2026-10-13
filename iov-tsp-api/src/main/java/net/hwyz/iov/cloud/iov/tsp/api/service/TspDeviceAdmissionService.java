@@ -9,7 +9,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 /**
- * 设备接入鉴权服务Feign接口
+ * 设备接入准入裁决服务Feign接口（TSP-DSN-CR-011 §4.1）
+ * <p>
+ * canonical 端点为 {@code POST /api/service/deviceAdmission/v1/decide}。
  *
  * @author hwyz_leo
  */
@@ -17,11 +19,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 public interface TspDeviceAdmissionService {
 
     /**
-     * 设备接入鉴权检查
+     * 设备接入准入裁决
      *
-     * @param checkVo 检查请求
-     * @return 检查结果
+     * @param request 裁决请求（必须携带本次 mTLS 实际叶子证书）
+     * @return 裁决结果
      */
-    @PostMapping("/check")
-    DeviceAdmissionResultVo checkDeviceAdmission(@RequestBody DeviceAdmissionCheckVo checkVo);
+    @PostMapping("/decide")
+    DeviceAdmissionResultVo decide(@RequestBody DeviceAdmissionCheckVo request);
 }
