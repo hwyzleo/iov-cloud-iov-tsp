@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.hwyz.iov.cloud.iov.tsp.service.common.exception.CertificateDependencyUnavailableException;
 import net.hwyz.iov.cloud.iov.tsp.service.common.util.DigestUtils;
-import net.hwyz.iov.cloud.iov.tsp.service.common.util.HsmUidNormalizer;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.DeviceUidNormalizer;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.AdmissionReason;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.BindStatus;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.CertificateIdentity;
@@ -28,9 +28,13 @@ import java.util.Set;
 /**
  * 设备接入鉴权领域服务（TSP-DSN-CR-011）
  * <p>
- * 编排顺序固定为：UID → 绑定 → 证书吊销/有效期 → 设备生命周期态 → 裁决。
+ * 编排顺序固定为：UID → 绑定 → 证书吊销/身份/有效期 → 设备生命周期态 → 裁决。
  * 安全结论：任何无法获得确定 VALID/REVOKED 的 PKI 依赖结果一律 fail-closed
  * （DENY + DEPENDENCY_UNAVAILABLE），不得降级为 ALLOW。
+ * <p>
+ * 证书身份：framework 返回的 {@code subjectCommonName} 必须经统一 {@link DeviceUidNormalizer}
+ * 与请求 uid 比较，缺失或不一致返回 DENY + IDENTITY_MISMATCH，不得归类为 CERT_REVOKED 或
+ * DEPENDENCY_UNAVAILABLE。
  *
  * @author hwyz_leo
  */
@@ -89,7 +93,7 @@ public class DeviceAdmissionDomainService {
      */
     private DeviceAdmission evaluate(DeviceAdmissionCommand command, Instant decisionAt) {
         // 1. UID 必须存在（不存在不调用 PKI）
-        String uid = HsmUidNormalizer.normalize(command.uid());
+        String uid = DeviceUidNormalizer.normalize(command.uid());
         Optional<DeviceAdmissionRepository.TboxInfo> tboxOptional = uid == null
                 ? Optional.empty()
                 : deviceAdmissionRepository.findByHsm(uid);
@@ -159,6 +163,19 @@ public class DeviceAdmissionDomainService {
                     .uidCheckResult(CHECK_PASS)
                     .pkiLatencyMs(pkiLatencyMs)
                     .dependencyOutcome(CertificateDependencyUnavailableException.CATEGORY_UNKNOWN)
+                    .build();
+        }
+        // 3.1 证书身份：framework 仅返回证书事实，CN↔uid 业务比较归 TSP（TSP-DSN-CR-011 §3）
+        if (!DeviceUidNormalizer.matches(uid, verification.subjectCommonName())) {
+            log.warn("设备接入证书身份不一致，fail-closed: uidDigest={}, pkiLatencyMs={}",
+                    DigestUtils.sha256Hex(command.uid()), pkiLatencyMs);
+            return deny(AdmissionReason.IDENTITY_MISMATCH, binding)
+                    .certStatus(CertificateStatus.VALID)
+                    .checkedAt(verification.checkedAt())
+                    .revocationSource(verification.source())
+                    .uidCheckResult(CHECK_FAIL)
+                    .pkiLatencyMs(pkiLatencyMs)
+                    .dependencyOutcome(AdmissionReason.IDENTITY_MISMATCH.name())
                     .build();
         }
         if (verification.notAfter() != null && decisionAt.isAfter(verification.notAfter())) {

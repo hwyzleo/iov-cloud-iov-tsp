@@ -10,6 +10,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.Certifica
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.CertificateVerification;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 import java.time.Instant;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,12 +51,12 @@ class FrameworkCertificateVerificationRepositoryTest {
 
     private static PkiClient.CertificateStatusResult result(PkiClient.RevocationState state) {
         return new PkiClient.CertificateStatusResult(
-                state, DECISION_AT.minusSeconds(60), DECISION_AT.plusSeconds(3600),
+                state, "HSM-0001", DECISION_AT.minusSeconds(60), DECISION_AT.plusSeconds(3600),
                 DECISION_AT, DECISION_AT.plusSeconds(60), PkiClient.RevocationSource.OCSP, DECISION_AT);
     }
 
     @Test
-    void goodState_shouldMapToValid() {
+    void goodState_shouldMapToValidAndPassThroughSubjectCommonName() {
         when(pkiClientProvider.getIfAvailable()).thenReturn(pkiClient);
         when(pkiClient.checkCertificateStatus(any())).thenReturn(result(PkiClient.RevocationState.GOOD));
 
@@ -62,6 +64,25 @@ class FrameworkCertificateVerificationRepositoryTest {
 
         assertEquals(CertificateStatus.VALID, verification.status());
         assertEquals("OCSP", verification.source());
+        assertEquals("HSM-0001", verification.subjectCommonName());
+    }
+
+    @Test
+    void verify_shouldMapIdentityToFrameworkQueryContract() {
+        when(pkiClientProvider.getIfAvailable()).thenReturn(pkiClient);
+        when(pkiClient.checkCertificateStatus(any())).thenReturn(result(PkiClient.RevocationState.GOOD));
+        CertificateIdentity identity = new CertificateIdentity("0a1b2c", "fingerprint", new byte[]{1, 2, 3});
+
+        repository.verify(identity, DECISION_AT);
+
+        ArgumentCaptor<PkiClient.CertificateStatusQuery> captor =
+                ArgumentCaptor.forClass(PkiClient.CertificateStatusQuery.class);
+        verify(pkiClient).checkCertificateStatus(captor.capture());
+        PkiClient.CertificateStatusQuery query = captor.getValue();
+        assertArrayEquals(new byte[]{1, 2, 3}, query.leafCertificateDer());
+        assertEquals("a1b2c", query.expectedSerial());
+        assertEquals("fingerprint", query.expectedSha256Fingerprint());
+        assertEquals(DECISION_AT, query.decisionAt());
     }
 
     @Test

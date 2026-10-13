@@ -26,6 +26,7 @@ public class DeviceAdmissionMetrics {
     private static final String METRIC_PKI_QUERY = "tsp_pki_revocation_query_total";
     private static final String METRIC_PKI_LATENCY = "tsp_pki_revocation_latency_seconds";
     private static final String METRIC_PKI_REVOKED = "tsp_pki_revoked_total";
+    private static final String METRIC_IDENTITY_MISMATCH = "tsp_device_admission_identity_mismatch_total";
     private static final String METRIC_PKI_DEPENDENCY = "tsp_pki_dependency_unavailable_total";
 
     private final MeterRegistry meterRegistry;
@@ -67,6 +68,13 @@ public class DeviceAdmissionMetrics {
      */
     public void revoked() {
         counter(METRIC_PKI_REVOKED, null, null, null, null);
+    }
+
+    /**
+     * 证书身份不一致计数（安全事件，与 CERT_REVOKED / DEPENDENCY_UNAVAILABLE 独立）。
+     */
+    public void identityMismatch() {
+        counter(METRIC_IDENTITY_MISMATCH, null, null, null, null);
     }
 
     /**

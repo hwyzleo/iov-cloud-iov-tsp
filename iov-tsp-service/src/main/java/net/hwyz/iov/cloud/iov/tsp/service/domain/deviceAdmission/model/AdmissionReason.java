@@ -11,6 +11,8 @@ public enum AdmissionReason {
     NONE,
     /** uid 在 TSP 设备事实中不存在 **/
     UID_UNKNOWN,
+    /** framework 返回的证书 subjectCommonName 缺失或与请求 uid 规范化后不一致 **/
+    IDENTITY_MISMATCH,
     /** 设备无当前有效（ACTIVE）车辆绑定 **/
     UNBOUND,
     /** 同一设备存在多条 ACTIVE 绑定，fail-closed **/

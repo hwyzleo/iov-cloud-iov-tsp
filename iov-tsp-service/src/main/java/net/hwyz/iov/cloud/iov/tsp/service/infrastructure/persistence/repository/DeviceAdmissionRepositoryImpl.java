@@ -1,7 +1,7 @@
 package net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.repository;
 
 import lombok.RequiredArgsConstructor;
-import net.hwyz.iov.cloud.iov.tsp.service.common.util.HsmUidNormalizer;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.DeviceUidNormalizer;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.repository.DeviceAdmissionRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.TboxMapper;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.VehicleTboxMapper;
@@ -32,7 +32,7 @@ public class DeviceAdmissionRepositoryImpl implements DeviceAdmissionRepository 
 
     @Override
     public Optional<TboxInfo> findByHsm(String hsm) {
-        TboxPo tboxPo = tboxMapper.selectByHsm(HsmUidNormalizer.normalize(hsm));
+        TboxPo tboxPo = tboxMapper.selectByHsm(DeviceUidNormalizer.normalize(hsm));
         if (tboxPo == null) {
             return Optional.empty();
         }

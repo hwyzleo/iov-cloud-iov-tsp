@@ -52,12 +52,13 @@ public class FrameworkCertificateVerificationRepository implements CertificateVe
         try {
             PkiClient.CertificateStatusResult result = pkiClient.checkCertificateStatus(
                     new PkiClient.CertificateStatusQuery(
+                            identity.leafCertificateDer(),
                             identity.serial(),
                             identity.fingerprint(),
-                            identity.leafCertificateDer(),
                             decisionAt));
             return new CertificateVerification(
                     mapState(result.revocationState()),
+                    result.subjectCommonName(),
                     result.notBefore(),
                     result.notAfter(),
                     result.source() == null ? null : result.source().name(),

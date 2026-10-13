@@ -79,6 +79,9 @@ public class DeviceAdmissionAppService {
         if (admission.getCertStatus() == net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.CertificateStatus.REVOKED) {
             deviceAdmissionMetrics.revoked();
         }
+        if (admission.getReason() == net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.AdmissionReason.IDENTITY_MISMATCH) {
+            deviceAdmissionMetrics.identityMismatch();
+        }
         if (admission.getReason() == net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.AdmissionReason.DEPENDENCY_UNAVAILABLE
                 && isPkiDependencyCategory(admission.getDependencyOutcome())) {
             deviceAdmissionMetrics.dependencyUnavailable(admission.getDependencyOutcome());

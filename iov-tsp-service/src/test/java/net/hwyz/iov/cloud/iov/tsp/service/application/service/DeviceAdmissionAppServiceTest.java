@@ -113,6 +113,24 @@ class DeviceAdmissionAppServiceTest {
     }
 
     @Test
+    void decide_identityMismatch_shouldRecordIdentityMetricOnly() {
+        DeviceAdmission admission = DeviceAdmission.builder()
+                .admissionResult(DeviceAdmissionResult.DENY)
+                .reason(net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.AdmissionReason.IDENTITY_MISMATCH)
+                .certStatus(net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.CertificateStatus.VALID)
+                .dependencyOutcome("IDENTITY_MISMATCH")
+                .pkiLatencyMs(3L)
+                .build();
+        when(deviceAdmissionDomainService.decide(any())).thenReturn(admission);
+
+        deviceAdmissionAppService.decide(cmd(validLeafBase64()), "VAGW");
+
+        verify(deviceAdmissionMetrics).identityMismatch();
+        verify(deviceAdmissionMetrics, org.mockito.Mockito.never()).revoked();
+        verify(deviceAdmissionMetrics, org.mockito.Mockito.never()).dependencyUnavailable(anyString());
+    }
+
+    @Test
     void decide_revokedAndDependencyUnavailable_shouldRecordSeparateMetrics() {
         DeviceAdmission admission = DeviceAdmission.builder()
                 .admissionResult(DeviceAdmissionResult.DENY)

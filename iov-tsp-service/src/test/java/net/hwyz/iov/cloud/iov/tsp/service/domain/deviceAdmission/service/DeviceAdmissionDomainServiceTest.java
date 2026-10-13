@@ -73,7 +73,7 @@ class DeviceAdmissionDomainServiceTest {
 
     private void givenCertificate(CertificateStatus status) {
         when(certificateVerificationRepository.verify(any(), any())).thenReturn(new CertificateVerification(
-                status, DECISION_AT.minus(1, ChronoUnit.DAYS), DECISION_AT.plus(1, ChronoUnit.DAYS),
+                status, UID, DECISION_AT.minus(1, ChronoUnit.DAYS), DECISION_AT.plus(1, ChronoUnit.DAYS),
                 "OCSP", DECISION_AT));
     }
 
@@ -182,7 +182,7 @@ class DeviceAdmissionDomainServiceTest {
         givenTbox(1);
         givenBinding();
         when(certificateVerificationRepository.verify(any(), any())).thenReturn(new CertificateVerification(
-                CertificateStatus.VALID, DECISION_AT.minus(2, ChronoUnit.DAYS), DECISION_AT.minus(1, ChronoUnit.DAYS),
+                CertificateStatus.VALID, UID, DECISION_AT.minus(2, ChronoUnit.DAYS), DECISION_AT.minus(1, ChronoUnit.DAYS),
                 "OCSP", DECISION_AT));
 
         DeviceAdmission result = deviceAdmissionDomainService.decide(command());
@@ -190,6 +190,52 @@ class DeviceAdmissionDomainServiceTest {
         assertEquals(DeviceAdmissionResult.DENY, result.getAdmissionResult());
         assertEquals(AdmissionReason.CERT_EXPIRED, result.getReason());
         assertEquals(CertificateStatus.EXPIRED, result.getCertStatus());
+    }
+
+    @Test
+    void identityMismatch_shouldDenyAndNotBeClassifiedAsDependencyOrRevocation() {
+        givenTbox(1);
+        givenBinding();
+        when(certificateVerificationRepository.verify(any(), any())).thenReturn(new CertificateVerification(
+                CertificateStatus.VALID, "HSM-OTHER", DECISION_AT.minus(1, ChronoUnit.DAYS),
+                DECISION_AT.plus(1, ChronoUnit.DAYS), "OCSP", DECISION_AT));
+
+        DeviceAdmission result = deviceAdmissionDomainService.decide(command());
+
+        assertEquals(DeviceAdmissionResult.DENY, result.getAdmissionResult());
+        assertEquals(AdmissionReason.IDENTITY_MISMATCH, result.getReason());
+        assertEquals(CertificateStatus.VALID, result.getCertStatus());
+        assertEquals("FAIL", result.getUidCheckResult());
+        assertEquals(AdmissionReason.IDENTITY_MISMATCH.name(), result.getDependencyOutcome());
+    }
+
+    @Test
+    void missingSubjectCommonName_shouldDenyWithIdentityMismatch() {
+        givenTbox(1);
+        givenBinding();
+        when(certificateVerificationRepository.verify(any(), any())).thenReturn(new CertificateVerification(
+                CertificateStatus.VALID, null, DECISION_AT.minus(1, ChronoUnit.DAYS),
+                DECISION_AT.plus(1, ChronoUnit.DAYS), "OCSP", DECISION_AT));
+
+        DeviceAdmission result = deviceAdmissionDomainService.decide(command());
+
+        assertEquals(DeviceAdmissionResult.DENY, result.getAdmissionResult());
+        assertEquals(AdmissionReason.IDENTITY_MISMATCH, result.getReason());
+        assertNotNull(result.getReason());
+    }
+
+    @Test
+    void subjectCommonNameNormalization_shouldAllowWhenEquivalent() {
+        givenTbox(1);
+        givenBinding();
+        when(certificateVerificationRepository.verify(any(), any())).thenReturn(new CertificateVerification(
+                CertificateStatus.VALID, "  hsm-0001 ", DECISION_AT.minus(1, ChronoUnit.DAYS),
+                DECISION_AT.plus(1, ChronoUnit.DAYS), "OCSP", DECISION_AT));
+
+        DeviceAdmission result = deviceAdmissionDomainService.decide(command());
+
+        assertEquals(DeviceAdmissionResult.ALLOW, result.getAdmissionResult());
+        assertEquals(AdmissionReason.NONE, result.getReason());
     }
 
     @Test
@@ -271,7 +317,7 @@ class DeviceAdmissionDomainServiceTest {
                 new DeviceAdmissionRepository.BindingInfo(VIN, 7L, bindingTime)));
         Instant checkedAt = DECISION_AT.minus(30, ChronoUnit.MINUTES);
         when(certificateVerificationRepository.verify(any(), any())).thenReturn(new CertificateVerification(
-                CertificateStatus.VALID, DECISION_AT.minus(1, ChronoUnit.DAYS), DECISION_AT.plus(1, ChronoUnit.DAYS),
+                CertificateStatus.VALID, UID, DECISION_AT.minus(1, ChronoUnit.DAYS), DECISION_AT.plus(1, ChronoUnit.DAYS),
                 "OCSP", checkedAt));
 
         DeviceAdmission result = deviceAdmissionDomainService.decide(command());

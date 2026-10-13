@@ -7,7 +7,7 @@ import net.hwyz.iov.cloud.framework.common.util.StrUtil;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.event.VagwDeviceOnlineEvent;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.mq.consumer.support.DeviceOnlineContractException;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.command.RecordTboxOnlineCmd;
-import net.hwyz.iov.cloud.iov.tsp.service.common.util.HsmUidNormalizer;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.DeviceUidNormalizer;
 import net.hwyz.iov.cloud.iov.tsp.service.common.util.SensitiveDataMasker;
 import org.springframework.stereotype.Component;
 
@@ -65,8 +65,8 @@ public class DeviceOnlineEventTranslator {
             throw new DeviceOnlineContractException("MALFORMED_JSON", "DEVICE_ONLINE payload 解析为空");
         }
 
-        String hsmUid = HsmUidNormalizer.normalize(event.getHsmUid());
-        if (!HsmUidNormalizer.isValid(hsmUid)) {
+        String hsmUid = DeviceUidNormalizer.normalize(event.getHsmUid());
+        if (!DeviceUidNormalizer.isValid(hsmUid)) {
             throw new DeviceOnlineContractException("INVALID_HSM_UID", "hsmUid 非法或超长");
         }
         if (StrUtil.isBlank(kafkaKey) || !kafkaKey.equals(hsmUid)) {

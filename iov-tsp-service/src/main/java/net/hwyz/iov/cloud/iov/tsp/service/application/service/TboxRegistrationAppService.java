@@ -7,7 +7,7 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.event.TboxV2cKeyProvisionedEvent;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.command.RecordTboxOnlineCmd;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.DeviceOnlineOutcome;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.support.TboxEventDigest;
-import net.hwyz.iov.cloud.iov.tsp.service.common.util.HsmUidNormalizer;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.DeviceUidNormalizer;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleTbox;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.TboxRegistrationEventRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.VehicleTboxProjectionRepository;
@@ -57,8 +57,8 @@ public class TboxRegistrationAppService {
             log.warn("收到空的 DEVICE_ONLINE 命令，忽略");
             return DeviceOnlineOutcome.PROCESSED;
         }
-        String hsmUid = HsmUidNormalizer.normalize(cmd.hsmUid());
-        if (!HsmUidNormalizer.isValid(hsmUid)) {
+        String hsmUid = DeviceUidNormalizer.normalize(cmd.hsmUid());
+        if (!DeviceUidNormalizer.isValid(hsmUid)) {
             log.warn("DEVICE_ONLINE 非法身份 hsmUid 摘要[{}]，隔离", mask(hsmUid));
             return DeviceOnlineOutcome.PERMANENT_TBOX_IDENTITY_CONFLICT;
         }
