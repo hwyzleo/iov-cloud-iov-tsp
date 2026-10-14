@@ -133,8 +133,8 @@ public class DeviceAdmissionDomainService {
                     new CertificateIdentity(command.certSerial(), command.certFingerprint(), command.leafCertificateDer()),
                     decisionAt);
         } catch (CertificateDependencyUnavailableException e) {
-            log.warn("PKI 证书状态查询依赖不可用，fail-closed: uidDigest={}, category={}",
-                    DigestUtils.sha256Hex(command.uid()), e.getCategory());
+            log.warn("PKI 证书状态查询依赖不可用，fail-closed: uidDigest={}, category={}, message={}, cause={}",
+                    DigestUtils.sha256Hex(command.uid()), e.getCategory(), e.getMessage(), causeChain(e));
             return deny(AdmissionReason.DEPENDENCY_UNAVAILABLE, null)
                     .bindStatus(BindStatus.BOUND)
                     .certStatus(CertificateStatus.UNKNOWN)
@@ -280,5 +280,26 @@ public class DeviceAdmissionDomainService {
             }
         }
         return max;
+    }
+
+    /**
+     * 展开 cause 链生成 "类型: 消息" 摘要，用于定位 framework 抛出的原始配置/依赖异常（带深度上限防循环）。
+     */
+    private static String causeChain(Throwable throwable) {
+        StringBuilder builder = new StringBuilder();
+        Throwable current = throwable.getCause();
+        int depth = 0;
+        while (current != null && current.getCause() != current && depth < 16) {
+            if (builder.length() > 0) {
+                builder.append(" <- ");
+            }
+            builder.append(current.getClass().getSimpleName());
+            if (current.getMessage() != null) {
+                builder.append(": ").append(current.getMessage());
+            }
+            current = current.getCause();
+            depth++;
+        }
+        return builder.length() == 0 ? null : builder.toString();
     }
 }

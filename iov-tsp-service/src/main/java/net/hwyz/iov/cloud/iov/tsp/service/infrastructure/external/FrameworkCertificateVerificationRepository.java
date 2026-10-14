@@ -39,12 +39,16 @@ public class FrameworkCertificateVerificationRepository implements CertificateVe
     @Override
     public CertificateVerification verify(CertificateIdentity identity, Instant decisionAt) {
         if (identity == null || identity.leafCertificateDer() == null || identity.leafCertificateDer().length == 0) {
+            log.warn("设备接入准入 PKI 检查缺少叶子证书 DER（mTLS 叶子证书未透传），fail-closed: category={}",
+                    CertificateDependencyUnavailableException.CATEGORY_CONFIGURATION);
             throw new CertificateDependencyUnavailableException(
                     CertificateDependencyUnavailableException.CATEGORY_CONFIGURATION,
                     "Leaf certificate DER is required for device admission revocation check", null);
         }
         PkiClient pkiClient = pkiClientProvider.getIfAvailable();
         if (pkiClient == null) {
+            log.warn("framework PkiClient 不可用（未装配任何 PkiClient Bean），fail-closed: category={}",
+                    CertificateDependencyUnavailableException.CATEGORY_CONFIGURATION);
             throw new CertificateDependencyUnavailableException(
                     CertificateDependencyUnavailableException.CATEGORY_CONFIGURATION,
                     "framework PkiClient is not available", null);
@@ -64,23 +68,47 @@ public class FrameworkCertificateVerificationRepository implements CertificateVe
                     result.source() == null ? null : result.source().name(),
                     result.checkedAt());
         } catch (CertificateStatusDependencyUnavailableException e) {
-            throw map(CertificateDependencyUnavailableException.CATEGORY_CONNECT, e);
+            throw map(CertificateDependencyUnavailableException.CATEGORY_CONNECT, e, pkiClient);
         } catch (CertificateStatusTrustValidationException e) {
-            throw map(CertificateDependencyUnavailableException.CATEGORY_TLS, e);
+            throw map(CertificateDependencyUnavailableException.CATEGORY_TLS, e, pkiClient);
         } catch (CertificateStatusOutcomeUnknownException e) {
-            throw map(CertificateDependencyUnavailableException.CATEGORY_TIMEOUT, e);
+            throw map(CertificateDependencyUnavailableException.CATEGORY_TIMEOUT, e, pkiClient);
         } catch (CertificateStatusProtocolException e) {
-            throw map(CertificateDependencyUnavailableException.CATEGORY_PROTOCOL, e);
+            throw map(CertificateDependencyUnavailableException.CATEGORY_PROTOCOL, e, pkiClient);
         } catch (CertificateStatusConfigurationException e) {
-            throw map(CertificateDependencyUnavailableException.CATEGORY_CONFIGURATION, e);
+            throw map(CertificateDependencyUnavailableException.CATEGORY_CONFIGURATION, e, pkiClient);
         } catch (RuntimeException e) {
-            throw map(CertificateDependencyUnavailableException.CATEGORY_INTERNAL, e);
+            throw map(CertificateDependencyUnavailableException.CATEGORY_INTERNAL, e, pkiClient);
         }
     }
 
-    private static CertificateDependencyUnavailableException map(String category, RuntimeException cause) {
+    /**
+     * 统一映射并记录 framework 类型化异常；此处携带最原始的 framework 异常信息与 PkiClient 实现类型，
+     * 便于区分「能力未启用 / Bean 未装配 / 配置非法 / 网络失败」。
+     */
+    private static CertificateDependencyUnavailableException map(String category, RuntimeException cause,
+                                                                 PkiClient pkiClient) {
+        log.warn("PKI 证书状态查询失败，fail-closed: category={}, pkiClient={}, exception={}, message={}, rootCause={}",
+                category,
+                pkiClient == null ? null : pkiClient.getClass().getSimpleName(),
+                cause.getClass().getSimpleName(),
+                cause.getMessage(),
+                rootCauseSummary(cause));
         return new CertificateDependencyUnavailableException(
                 category, "PKI certificate status query failed: " + cause.getClass().getSimpleName(), cause);
+    }
+
+    /**
+     * 追到最内层 cause 并生成 "类型: 消息" 摘要（带深度上限防循环）。
+     */
+    private static String rootCauseSummary(Throwable throwable) {
+        Throwable root = throwable;
+        int depth = 0;
+        while (root.getCause() != null && root.getCause() != root && depth < 16) {
+            root = root.getCause();
+            depth++;
+        }
+        return root.getClass().getSimpleName() + (root.getMessage() == null ? "" : ": " + root.getMessage());
     }
 
     private static CertificateStatus mapState(PkiClient.RevocationState state) {
