@@ -28,6 +28,7 @@ public class DeviceAdmissionMetrics {
     private static final String METRIC_PKI_REVOKED = "tsp_pki_revoked_total";
     private static final String METRIC_IDENTITY_MISMATCH = "tsp_device_admission_identity_mismatch_total";
     private static final String METRIC_PKI_DEPENDENCY = "tsp_pki_dependency_unavailable_total";
+    private static final String METRIC_AUDIT_PERSIST_FAILED = "tsp_device_admission_audit_persist_failed_total";
 
     private final MeterRegistry meterRegistry;
 
@@ -82,6 +83,16 @@ public class DeviceAdmissionMetrics {
      */
     public void dependencyUnavailable(String category) {
         counter(METRIC_PKI_DEPENDENCY, "category", category, null, null);
+    }
+
+    /**
+     * 审计落库失败计数（TSP-DSN-CR-011 §9：每次准入审计 SHALL 记录，失败不得静默）。
+     * <p>
+     * 该计数与裁决决策分离：审计写失败时准入请求按 fail-closed 直接失败（异常向上抛出），
+     * 因此不产生 decision 计数。触发即应高优先级告警。
+     */
+    public void auditPersistFailed() {
+        counter(METRIC_AUDIT_PERSIST_FAILED, null, null, null, null);
     }
 
     private void counter(String name, String tagKeyA, String tagValueA, String tagKeyB, String tagValueB) {
