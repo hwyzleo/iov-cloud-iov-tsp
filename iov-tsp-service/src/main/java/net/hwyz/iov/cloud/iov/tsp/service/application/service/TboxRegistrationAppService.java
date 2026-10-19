@@ -6,6 +6,7 @@ import net.hwyz.iov.cloud.framework.common.util.StrUtil;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.event.TboxV2cKeyProvisionedEvent;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.command.RecordTboxOnlineCmd;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.DeviceOnlineOutcome;
+import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.TboxV2cActivationOutcome;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.support.TboxEventDigest;
 import net.hwyz.iov.cloud.iov.tsp.service.common.util.DeviceUidNormalizer;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleTbox;
@@ -32,6 +33,8 @@ import java.util.Optional;
  *   <li>DEVICE_ONLINE 应用层校验（TBOX 身份唯一、tboxSn、active 绑定、VIN 一致性）与契约摘要冲突检测；</li>
  *   <li>本服务是 {@code tb_tbox_registration_event} 的唯一写入者（R4），领域服务只更新 {@code tb_tbox}。</li>
  * </ul>
+ * TSP-DSN-CR-012：V2C 聚合成功事件在本服务内完成 Inbox 占位、生命周期收口与 Inbox 成功事实的同事务写入，
+ * 并将结果细分为“成功 / 有界重试 / 永久拒绝”。
  *
  * @author hwyz_leo
  */
@@ -128,49 +131,70 @@ public class TboxRegistrationAppService {
 
     /**
      * 处理 VMD V2C 业务密钥开通结果事件：驱动 ACTIVATING -> ACTIVE，并由本服务写入事件事实。
+     * <p>
+     * TSP-DSN-CR-012 §5/§6：Inbox 占位（eventId、eventType+requestId）→ 领域校验与状态机 →
+     * 原子生命周期更新 + Inbox 成功事实同事务提交；生命周期未成功推进时不落库 Inbox 成功事实。
      *
      * @param event VMD V2C 密钥开通结果事件
-     * @return 是否完成激活（含幂等成功）
+     * @return 细分处理结果（供消费者区分 ack / 重试 / DLT）
      */
     @Transactional
-    public boolean handleV2cProvisioned(TboxV2cKeyProvisionedEvent event) {
+    public TboxV2cActivationOutcome handleV2cProvisioned(TboxV2cKeyProvisionedEvent event) {
         if (event == null) {
             log.warn("收到空的 V2C 聚合完成事件，忽略");
-            return false;
+            return TboxV2cActivationOutcome.PERMANENT_CONTRACT_INVALID;
         }
         String eventId = event.getEventId();
         String requestId = event.getRequestId();
+        if (StrUtil.isBlank(eventId) || StrUtil.isBlank(requestId) || StrUtil.isBlank(event.getDeviceSn())) {
+            log.warn("V2C 聚合完成事件缺失必要身份字段，永久拒绝");
+            return TboxV2cActivationOutcome.PERMANENT_CONTRACT_INVALID;
+        }
         String digest = TboxEventDigest.v2c(event);
 
         Optional<TboxRegistrationEventRecord> byEventId = tboxRegistrationEventRepository.findByEventId(eventId);
         if (byEventId.isPresent()) {
             if (isDigestConflict(byEventId.get().contractDigest(), digest)) {
-                log.warn("V2C 聚合完成事件契约冲突: eventId={}, 摘要不一致，拒绝并告警", eventId);
-                return false;
+                log.warn("V2C 聚合完成事件契约冲突: eventId 已存在且摘要不一致，拒绝并告警");
+                return TboxV2cActivationOutcome.PERMANENT_CONTRACT_CONFLICT;
             }
             log.info("V2C 聚合完成事件[{}]已消费，幂等成功", eventId);
-            return true;
+            return TboxV2cActivationOutcome.DUPLICATE;
         }
         Optional<TboxRegistrationEventRecord> byRequest = tboxRegistrationEventRepository
                 .findByEventTypeAndRequestId(DeviceRegistrationDomainService.EVENT_TYPE_V2C_KEY_PROVISIONED, requestId);
         if (byRequest.isPresent()) {
             if (isDigestConflict(byRequest.get().contractDigest(), digest)) {
-                log.warn("V2C 聚合完成事件契约冲突: requestId={}, 摘要不一致，拒绝并告警", requestId);
-                return false;
+                log.warn("V2C 聚合完成事件契约冲突: requestId 已存在且摘要不一致，拒绝并告警");
+                return TboxV2cActivationOutcome.PERMANENT_CONTRACT_CONFLICT;
             }
-            log.info("V2C 聚合完成事件 requestId={} 已消费，幂等成功", requestId);
-            return true;
+            log.info("V2C 聚合完成事件 requestId 已消费，幂等成功");
+            return TboxV2cActivationOutcome.DUPLICATE;
         }
 
         ActivationOutcome outcome = deviceRegistrationDomainService.completeActivation(event);
-        if (outcome == ActivationOutcome.ACTIVATED || outcome == ActivationOutcome.IDEMPOTENT_ACTIVE) {
+        TboxV2cActivationOutcome result = map(outcome);
+        if (result.isSuccess()) {
             saveEvent(new TboxRegistrationEventRecord(
                     eventId, requestId, event.getDeviceSn(),
                     DeviceRegistrationDomainService.EVENT_TYPE_V2C_KEY_PROVISIONED,
                     event.getOccurredAt(), LocalDateTime.now(), "SUCCEEDED", digest, null, null));
-            return true;
         }
-        return false;
+        return result;
+    }
+
+    private TboxV2cActivationOutcome map(ActivationOutcome outcome) {
+        return switch (outcome) {
+            case ACTIVATED -> TboxV2cActivationOutcome.ACTIVATED;
+            case IDEMPOTENT_ACTIVE -> TboxV2cActivationOutcome.IDEMPOTENT_ACTIVE;
+            case RETRY_OUT_OF_ORDER -> TboxV2cActivationOutcome.RETRY_OUT_OF_ORDER;
+            case RETRY_DEVICE_NOT_FOUND -> TboxV2cActivationOutcome.RETRY_DEVICE_NOT_FOUND;
+            case RETRY_BINDING_MISSING -> TboxV2cActivationOutcome.RETRY_BINDING_MISSING;
+            case RETRY_TRANSIENT -> TboxV2cActivationOutcome.RETRY_TRANSIENT;
+            case REJECTED_CONTRACT -> TboxV2cActivationOutcome.PERMANENT_CONTRACT_INVALID;
+            case REJECTED_DEVICE_STATE -> TboxV2cActivationOutcome.PERMANENT_DEVICE_STATE;
+            case REJECTED_BINDING_CONFLICT -> TboxV2cActivationOutcome.PERMANENT_BINDING_CONFLICT;
+        };
     }
 
     private boolean isDigestConflict(String existingDigest, String currentDigest) {

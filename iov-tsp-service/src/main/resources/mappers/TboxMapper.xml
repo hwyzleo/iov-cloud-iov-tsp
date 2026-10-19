@@ -262,15 +262,15 @@
         AND t.device_status IN (#{preActiveStatus}, #{activatingStatus}, #{activeStatus})
     </update>
 
-    <!-- 完成业务激活（幂等） -->
-    <!-- 仅当 device_status = ACTIVATING AND activate_time IS NULL 时条件更新 ACTIVE + activate_time -->
-    <update id="completeActivation">
+    <!-- 完成业务激活（幂等，TSP-DSN-CR-012 §6） -->
+    <!-- 按已解析主键条件更新；仅当 device_status = ACTIVATING AND activate_time IS NULL 时更新为 ACTIVE + activate_time -->
+    <update id="completeActivationById">
         UPDATE tb_tbox t SET
         t.device_status = #{activeStatus},
         t.activate_time = #{activateTime},
         t.modify_time = now(),
         t.row_version = t.row_version + 1
-        WHERE t.hsm = #{hsmUid}
+        WHERE t.id = #{id}
         AND t.device_status = #{activatingStatus}
         AND t.activate_time IS NULL
         AND t.row_valid = 1

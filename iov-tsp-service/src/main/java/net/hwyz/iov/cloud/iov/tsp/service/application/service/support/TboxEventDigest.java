@@ -12,6 +12,8 @@ import java.util.List;
  * 注册激活事件契约不可逆摘要
  * <p>
  * TSP-DSN-CR-010：DEVICE_ONLINE 相似 eventId 内容冲突检测；V2C 事件沿用 CR-008 口径（不含 keyId）。
+ * TSP-DSN-CR-012 §7：仅对规范化非敏感字段（deviceSn|businessDomain|purpose:version）计算，
+ * 用于冲突识别，不保存 keyId 列表、proof、证书摘要或 Wrapped Key。
  *
  * @author hwyz_leo
  */

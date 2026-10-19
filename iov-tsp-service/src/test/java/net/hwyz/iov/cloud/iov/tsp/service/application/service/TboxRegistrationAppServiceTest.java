@@ -3,6 +3,7 @@ package net.hwyz.iov.cloud.iov.tsp.service.application.service;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.event.TboxV2cKeyProvisionedEvent;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.command.RecordTboxOnlineCmd;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.DeviceOnlineOutcome;
+import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.TboxV2cActivationOutcome;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.support.TboxEventDigest;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleTbox;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.TboxRegistrationEventRepository;
@@ -191,39 +192,115 @@ class TboxRegistrationAppServiceTest {
     }
 
     @Test
-    void handleV2cProvisioned_AlreadyConsumedSameDigest_ShouldReturnTrue() {
+    void handleV2cProvisioned_AlreadyConsumedSameDigest_ShouldBeDuplicate() {
         TboxV2cKeyProvisionedEvent event = validV2cEvent();
         when(tboxRegistrationEventRepository.findByEventId(EVENT_ID))
                 .thenReturn(Optional.of(new TboxRegistrationEventRecord(
                         EVENT_ID, "REQ-1", SN, DeviceRegistrationDomainService.EVENT_TYPE_V2C_KEY_PROVISIONED,
                         OCCURRED_AT, null, "SUCCEEDED", TboxEventDigest.v2c(event), null, null)));
 
-        assertTrue(tboxRegistrationAppService.handleV2cProvisioned(event));
+        assertEquals(TboxV2cActivationOutcome.DUPLICATE, tboxRegistrationAppService.handleV2cProvisioned(event));
         verify(deviceRegistrationDomainService, never()).completeActivation(any());
     }
 
     @Test
-    void handleV2cProvisioned_Activated_ShouldPersistAndReturnTrue() {
+    void handleV2cProvisioned_Activated_ShouldPersistInboxAndReturnActivated() {
         TboxV2cKeyProvisionedEvent event = validV2cEvent();
         when(tboxRegistrationEventRepository.findByEventId(anyString())).thenReturn(Optional.empty());
         when(tboxRegistrationEventRepository.findByEventTypeAndRequestId(anyString(), anyString()))
                 .thenReturn(Optional.empty());
         when(deviceRegistrationDomainService.completeActivation(event)).thenReturn(ActivationOutcome.ACTIVATED);
 
-        assertTrue(tboxRegistrationAppService.handleV2cProvisioned(event));
+        assertEquals(TboxV2cActivationOutcome.ACTIVATED, tboxRegistrationAppService.handleV2cProvisioned(event));
         verify(tboxRegistrationEventRepository).save(any(TboxRegistrationEventRecord.class));
     }
 
     @Test
-    void handleV2cProvisioned_Rejected_ShouldNotPersistAndReturnFalse() {
+    void handleV2cProvisioned_IdempotentActive_ShouldPersistInbox() {
         TboxV2cKeyProvisionedEvent event = validV2cEvent();
         when(tboxRegistrationEventRepository.findByEventId(anyString())).thenReturn(Optional.empty());
         when(tboxRegistrationEventRepository.findByEventTypeAndRequestId(anyString(), anyString()))
                 .thenReturn(Optional.empty());
-        when(deviceRegistrationDomainService.completeActivation(event)).thenReturn(ActivationOutcome.REJECTED);
+        when(deviceRegistrationDomainService.completeActivation(event)).thenReturn(ActivationOutcome.IDEMPOTENT_ACTIVE);
 
-        assertFalse(tboxRegistrationAppService.handleV2cProvisioned(event));
+        assertEquals(TboxV2cActivationOutcome.IDEMPOTENT_ACTIVE,
+                tboxRegistrationAppService.handleV2cProvisioned(event));
+        verify(tboxRegistrationEventRepository).save(any(TboxRegistrationEventRecord.class));
+    }
+
+    @Test
+    void handleV2cProvisioned_DuplicateRequestIdSameDigest_ShouldBeDuplicate() {
+        TboxV2cKeyProvisionedEvent event = validV2cEvent();
+        when(tboxRegistrationEventRepository.findByEventId(anyString())).thenReturn(Optional.empty());
+        when(tboxRegistrationEventRepository.findByEventTypeAndRequestId(anyString(), anyString()))
+                .thenReturn(Optional.of(new TboxRegistrationEventRecord(
+                        "OTHER-EVT", "REQ-1", SN, DeviceRegistrationDomainService.EVENT_TYPE_V2C_KEY_PROVISIONED,
+                        OCCURRED_AT, null, "SUCCEEDED", TboxEventDigest.v2c(event), null, null)));
+
+        assertEquals(TboxV2cActivationOutcome.DUPLICATE, tboxRegistrationAppService.handleV2cProvisioned(event));
+        verify(deviceRegistrationDomainService, never()).completeActivation(any());
+    }
+
+    @Test
+    void handleV2cProvisioned_SameEventIdDifferentDigest_ShouldConflict() {
+        TboxV2cKeyProvisionedEvent event = validV2cEvent();
+        when(tboxRegistrationEventRepository.findByEventId(EVENT_ID))
+                .thenReturn(Optional.of(new TboxRegistrationEventRecord(
+                        EVENT_ID, "REQ-1", SN, DeviceRegistrationDomainService.EVENT_TYPE_V2C_KEY_PROVISIONED,
+                        OCCURRED_AT, null, "SUCCEEDED", "different-digest", null, null)));
+
+        assertEquals(TboxV2cActivationOutcome.PERMANENT_CONTRACT_CONFLICT,
+                tboxRegistrationAppService.handleV2cProvisioned(event));
         verify(tboxRegistrationEventRepository, never()).save(any());
+    }
+
+    @Test
+    void handleV2cProvisioned_SameRequestIdDifferentDigest_ShouldConflict() {
+        TboxV2cKeyProvisionedEvent event = validV2cEvent();
+        when(tboxRegistrationEventRepository.findByEventId(anyString())).thenReturn(Optional.empty());
+        when(tboxRegistrationEventRepository.findByEventTypeAndRequestId(anyString(), anyString()))
+                .thenReturn(Optional.of(new TboxRegistrationEventRecord(
+                        "OTHER-EVT", "REQ-1", SN, DeviceRegistrationDomainService.EVENT_TYPE_V2C_KEY_PROVISIONED,
+                        OCCURRED_AT, null, "SUCCEEDED", "different-digest", null, null)));
+
+        assertEquals(TboxV2cActivationOutcome.PERMANENT_CONTRACT_CONFLICT,
+                tboxRegistrationAppService.handleV2cProvisioned(event));
+        verify(tboxRegistrationEventRepository, never()).save(any());
+    }
+
+    @Test
+    void handleV2cProvisioned_RejectedState_ShouldNotPersistInbox() {
+        TboxV2cKeyProvisionedEvent event = validV2cEvent();
+        when(tboxRegistrationEventRepository.findByEventId(anyString())).thenReturn(Optional.empty());
+        when(tboxRegistrationEventRepository.findByEventTypeAndRequestId(anyString(), anyString()))
+                .thenReturn(Optional.empty());
+        when(deviceRegistrationDomainService.completeActivation(event))
+                .thenReturn(ActivationOutcome.REJECTED_DEVICE_STATE);
+
+        assertEquals(TboxV2cActivationOutcome.PERMANENT_DEVICE_STATE,
+                tboxRegistrationAppService.handleV2cProvisioned(event));
+        verify(tboxRegistrationEventRepository, never()).save(any());
+    }
+
+    @Test
+    void handleV2cProvisioned_RetryOutOfOrder_ShouldNotPersistInbox() {
+        TboxV2cKeyProvisionedEvent event = validV2cEvent();
+        when(tboxRegistrationEventRepository.findByEventId(anyString())).thenReturn(Optional.empty());
+        when(tboxRegistrationEventRepository.findByEventTypeAndRequestId(anyString(), anyString()))
+                .thenReturn(Optional.empty());
+        when(deviceRegistrationDomainService.completeActivation(event))
+                .thenReturn(ActivationOutcome.RETRY_OUT_OF_ORDER);
+
+        assertEquals(TboxV2cActivationOutcome.RETRY_OUT_OF_ORDER,
+                tboxRegistrationAppService.handleV2cProvisioned(event));
+        assertTrue(TboxV2cActivationOutcome.RETRY_OUT_OF_ORDER.isRetryable());
+        verify(tboxRegistrationEventRepository, never()).save(any());
+    }
+
+    @Test
+    void handleV2cProvisioned_NullEvent_ShouldBePermanentContractInvalid() {
+        assertEquals(TboxV2cActivationOutcome.PERMANENT_CONTRACT_INVALID,
+                tboxRegistrationAppService.handleV2cProvisioned(null));
     }
 
     private TboxV2cKeyProvisionedEvent validV2cEvent() {

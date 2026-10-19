@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>
  * 校验 TSP-DSN-CR-008 相关语句已正确声明且可被 MyBatis 解析加载（不依赖数据库连接）：
  * <ul>
- *   <li>TboxMapper.xml：recordLoginById / completeActivation / selectAllByHsm</li>
+ *   <li>TboxMapper.xml：recordLoginById / completeActivationById / selectAllByHsm</li>
  *   <li>VehicleTboxMapper.xml：selectActiveBySnAndCategory（注册激活校验唯一 active 绑定）</li>
  *   <li>TboxRegistrationEventMapper：注解 SQL（消费幂等记录）</li>
  * </ul>
@@ -35,8 +35,8 @@ class TboxMapperXmlTest {
 
         assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".recordLoginById"),
                 "缺少 recordLoginById 语句");
-        assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".completeActivation"),
-                "缺少 completeActivation 语句");
+        assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".completeActivationById"),
+                "缺少 completeActivationById 语句");
         assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".selectByHsm"),
                 "缺少 selectByHsm 语句");
         assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".selectAllByHsm"),

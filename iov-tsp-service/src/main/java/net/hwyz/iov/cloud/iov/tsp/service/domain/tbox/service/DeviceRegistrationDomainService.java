@@ -30,6 +30,9 @@ import java.util.Set;
  * TSP-DSN-CR-010 R4：本领域服务只更新 {@code tb_tbox}，按已解析主键条件更新（不再使用非唯一
  * {@code WHERE hsm=?}）；注册激活事件事实（{@code tb_tbox_registration_event}）由
  * {@code TboxRegistrationAppService} 作为唯一写入者落库，领域服务仅返回 {@link ActivationOutcome}。
+ * <p>
+ * TSP-DSN-CR-012：ACTIVATING→ACTIVE 按已解析主键条件更新，set-once activateTime；
+ * 条件未命中时同事务重读，生命周期未推进不返回成功（避免 Inbox 成功事实与设备状态不一致）。
  *
  * @author hwyz_leo
  */
@@ -98,8 +101,10 @@ public class DeviceRegistrationDomainService {
     /**
      * 完成业务激活（幂等，只更新 tb_tbox）
      * <p>
-     * 校验事件契约、唯一 active 绑定投影与当前状态后，条件更新 ACTIVATING -> ACTIVE 并 set-once
-     * 写入 activate_time；事件事实由应用服务落库。
+     * TSP-DSN-CR-012 §6：校验事件契约、唯一 active 绑定投影与当前状态后，按已解析主键
+     * 条件更新 ACTIVATING -> ACTIVE 并 set-once 写入 activate_time；事件事实由应用服务在同一事务落库。
+     * 条件更新未命中时同事务重读设备状态：已 ACTIVE 视为幂等成功，否则返回可重试结果，
+     * 禁止在生命周期未推进时落库 Inbox 成功事实。
      *
      * @param event VMD V2C 聚合完成事件
      * @return 处理结果
@@ -108,72 +113,98 @@ public class DeviceRegistrationDomainService {
     public ActivationOutcome completeActivation(TboxV2cKeyProvisionedEvent event) {
         if (event == null) {
             log.warn("收到空的 V2C 聚合完成事件，忽略");
-            return ActivationOutcome.REJECTED;
+            return ActivationOutcome.REJECTED_CONTRACT;
         }
         if (!isContractValid(event)) {
-            log.warn("V2C 聚合完成事件契约校验失败, eventId={}, requestId={}, deviceSn={}, domain={}, result={}",
+            log.warn("V2C 聚合完成事件契约校验失败, eventId={}, requestId={}, deviceSn={}, domain={}, result={}, contractVersion={}",
                     event.getEventId(), event.getRequestId(), event.getDeviceSn(),
-                    event.getBusinessDomain(), event.getResult());
-            return ActivationOutcome.REJECTED;
+                    event.getBusinessDomain(), event.getResult(), event.getContractVersion());
+            return ActivationOutcome.REJECTED_CONTRACT;
         }
 
         String deviceSn = event.getDeviceSn();
         String requestId = event.getRequestId();
 
-        // 设备存在性
+        // 设备存在性（跨 Topic 乱序/导入延迟：有界重试后人工对账）
         TboxPo tbox = tboxMapper.selectBySn(deviceSn);
         if (tbox == null) {
-            log.warn("V2C 聚合完成事件设备不存在, deviceSn={}, requestId={}，fail-closed 并告警", deviceSn, requestId);
-            return ActivationOutcome.REJECTED;
+            log.warn("V2C 聚合完成事件设备不存在, deviceSn={}, requestId={}，进入有界重试/对账", deviceSn, requestId);
+            return ActivationOutcome.RETRY_DEVICE_NOT_FOUND;
         }
 
         // 唯一当前 active 绑定投影
         List<VehicleTbox> activeBindings = vehicleTboxProjectionRepository.listActiveTboxBindingsBySn(deviceSn);
-        if (activeBindings.size() != 1) {
-            log.warn("V2C 聚合完成事件绑定投影缺失/冲突, deviceSn={}, activeBindings={}, requestId={}，fail-closed 并告警",
+        if (activeBindings == null || activeBindings.isEmpty()) {
+            log.warn("V2C 聚合完成事件绑定投影缺失, deviceSn={}, requestId={}，进入有界重试/对账", deviceSn, requestId);
+            return ActivationOutcome.RETRY_BINDING_MISSING;
+        }
+        if (activeBindings.size() > 1) {
+            log.warn("V2C 聚合完成事件绑定投影冲突, deviceSn={}, activeBindings={}, requestId={}，永久拒绝并告警",
                     deviceSn, activeBindings.size(), requestId);
-            return ActivationOutcome.REJECTED;
+            return ActivationOutcome.REJECTED_BINDING_CONFLICT;
         }
 
         DeviceStatus status = resolveStatus(tbox.getDeviceStatus());
         if (status == null) {
             log.warn("V2C 聚合完成事件设备状态非法, deviceSn={}, deviceStatus={}，fail-closed", deviceSn, tbox.getDeviceStatus());
-            return ActivationOutcome.REJECTED;
+            return ActivationOutcome.REJECTED_DEVICE_STATE;
         }
         if (status == DeviceStatus.BLOCKED || status == DeviceStatus.RETIRED) {
-            log.warn("V2C 聚合完成事件设备状态[{}]不允许激活, deviceSn={}, requestId={}，fail-closed 并告警",
+            log.warn("V2C 聚合完成事件设备状态[{}]不允许激活, deviceSn={}, requestId={}，永久拒绝并告警",
                     status, deviceSn, requestId);
-            return ActivationOutcome.REJECTED;
+            return ActivationOutcome.REJECTED_DEVICE_STATE;
         }
         if (status == DeviceStatus.PRE_ACTIVE) {
-            log.warn("V2C 聚合完成事件早于 DEVICE_ONLINE（跨 Topic 乱序）, deviceSn={}, requestId={}，进入重试/对账",
+            log.warn("V2C 聚合完成事件早于 DEVICE_ONLINE（跨 Topic 乱序）, deviceSn={}, requestId={}，等待上线事件后重试",
                     deviceSn, requestId);
-            return ActivationOutcome.OUT_OF_ORDER;
+            return ActivationOutcome.RETRY_OUT_OF_ORDER;
         }
         if (status == DeviceStatus.ACTIVE) {
             log.info("设备[{}]已为 ACTIVE，V2C 聚合完成事件幂等成功, requestId={}", deviceSn, requestId);
             return ActivationOutcome.IDEMPOTENT_ACTIVE;
         }
 
-        // ACTIVATING -> ACTIVE（条件更新保证并发幂等）
+        // ACTIVATING -> ACTIVE（按已解析主键条件更新，保证并发幂等与 set-once activateTime）
         LocalDateTime activateTime = event.getOccurredAt() != null
                 ? LocalDateTime.ofInstant(event.getOccurredAt(), ZoneId.systemDefault())
                 : LocalDateTime.now();
-        int updated = tboxMapper.completeActivation(deviceSn, activateTime,
+        int updated = tboxMapper.completeActivationById(tbox.getId(), activateTime,
                 DeviceStatus.ACTIVATING.getCode(),
                 DeviceStatus.ACTIVE.getCode());
         if (updated > 0) {
             log.info("设备[{}]业务激活完成, activateTime={}, requestId={}", deviceSn, activateTime, requestId);
-        } else {
-            log.info("设备[{}]业务激活条件更新未命中（并发已激活）, requestId={}，幂等成功", deviceSn, requestId);
+            return ActivationOutcome.ACTIVATED;
         }
-        return ActivationOutcome.ACTIVATED;
+
+        // 条件更新未命中：同事务重读，确认是否已被并发激活
+        TboxPo latest = tboxMapper.selectBySn(deviceSn);
+        if (latest == null) {
+            log.warn("设备[{}]激活条件更新未命中且重读不存在, requestId={}，进入有界重试", deviceSn, requestId);
+            return ActivationOutcome.RETRY_DEVICE_NOT_FOUND;
+        }
+        DeviceStatus latestStatus = resolveStatus(latest.getDeviceStatus());
+        if (latestStatus == DeviceStatus.ACTIVE) {
+            log.info("设备[{}]已被并发激活, requestId={}，幂等成功", deviceSn, requestId);
+            return ActivationOutcome.IDEMPOTENT_ACTIVE;
+        }
+        if (latestStatus == DeviceStatus.BLOCKED || latestStatus == DeviceStatus.RETIRED) {
+            log.warn("设备[{}]激活条件更新未命中且状态[{}]不允许激活, requestId={}，永久拒绝并告警",
+                    deviceSn, latestStatus, requestId);
+            return ActivationOutcome.REJECTED_DEVICE_STATE;
+        }
+        log.warn("设备[{}]激活条件更新未命中, latestStatus={}, requestId={}，进入有界重试",
+                deviceSn, latestStatus, requestId);
+        return ActivationOutcome.RETRY_TRANSIENT;
     }
 
     private boolean isContractValid(TboxV2cKeyProvisionedEvent event) {
         if (StrUtil.isBlank(event.getEventId())
                 || StrUtil.isBlank(event.getRequestId())
                 || StrUtil.isBlank(event.getDeviceSn())) {
+            return false;
+        }
+        if (StrUtil.isNotBlank(event.getContractVersion())
+                && !TboxV2cKeyProvisionedEvent.SUPPORTED_CONTRACT_VERSIONS.contains(event.getContractVersion())) {
             return false;
         }
         if (!TboxV2cKeyProvisionedEvent.BUSINESS_DOMAIN_V2C_COMM.equals(event.getBusinessDomain())) {

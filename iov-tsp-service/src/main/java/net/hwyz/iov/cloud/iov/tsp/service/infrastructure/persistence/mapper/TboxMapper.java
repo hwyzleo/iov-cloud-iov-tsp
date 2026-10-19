@@ -64,16 +64,19 @@ public interface TboxMapper extends BaseDao<TboxPo, Long> {
     /**
      * 完成业务激活（幂等）
      * 仅当 device_status = ACTIVATING AND activate_time IS NULL 时更新为 ACTIVE 并写入 activate_time
+     * <p>
+     * TSP-DSN-CR-012 §6：按已解析主键条件更新（不使用非唯一 hsm/sn 条件），
+     * 与 Inbox 成功事实处于同一数据库事务。
      *
-     * @param hsmUid           规范设备身份（tb_tbox.hsm）
+     * @param id               设备主键
      * @param activateTime     激活时间
      * @param activatingStatus ACTIVATING 码值
      * @param activeStatus     ACTIVE 码值
      * @return 更新行数
      */
-    int completeActivation(@Param("hsmUid") String hsmUid,
-                           @Param("activateTime") LocalDateTime activateTime,
-                           @Param("activatingStatus") Integer activatingStatus,
-                           @Param("activeStatus") Integer activeStatus);
+    int completeActivationById(@Param("id") Long id,
+                               @Param("activateTime") LocalDateTime activateTime,
+                               @Param("activatingStatus") Integer activatingStatus,
+                               @Param("activeStatus") Integer activeStatus);
 
 }
