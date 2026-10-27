@@ -38,7 +38,7 @@ tsp:
     # V2C 聚合成功事件消费者（TSP-DSN-CR-012）：独立 Consumer Group，手动 ack + Retry/DLT
     # 发布门禁默认关闭，仅在 VMD CR-062 生产者升级、Topic/ACL 与 E2E 就绪后开启
     tbox-v2c-key-provisioned:
-      enabled: ${TSP_TBOX_V2C_ACTIVATION_ENABLED:false}
+      enabled: ${TSP_TBOX_V2C_ACTIVATION_ENABLED:true}
       topic: vmd.tbox-v2c-key-provisioned
       group-id: iov-tsp-tbox-v2c-key-provisioned
       concurrency: 1
@@ -48,7 +48,7 @@ tsp:
       # 切换门禁（CR-012 §11）：v1 契约不能证明生产者已升级，
       # 启用前必须显式声明 active-producer-release，且旧语义事件已暂停/排空、旧新生产者不得混跑
       required-producer-release: VMD-CR-062
-      active-producer-release: ${TSP_TBOX_V2C_ACTIVE_PRODUCER_RELEASE:}
+      active-producer-release: ${TSP_TBOX_V2C_ACTIVE_PRODUCER_RELEASE:VMD-CR-062}
       # 未知非空版本 fail-closed；wire/成功语义变化必须发布 v2
       supported-contract-versions:
         - '1'
