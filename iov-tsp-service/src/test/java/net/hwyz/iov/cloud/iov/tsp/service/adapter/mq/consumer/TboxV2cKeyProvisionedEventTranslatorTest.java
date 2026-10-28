@@ -1,14 +1,15 @@
 package net.hwyz.iov.cloud.iov.tsp.service.adapter.mq.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import net.hwyz.iov.cloud.framework.web.jackson.IovJavaTimeReadModule;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.event.TboxV2cKeyProvisionedEvent;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.mq.consumer.support.TboxV2cKeyProvisionedContractException;
-import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.JacksonInstantCompatModule;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspTboxV2cKeyProvisionedProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -29,8 +30,8 @@ class TboxV2cKeyProvisionedEventTranslatorTest {
     void setUp() {
         properties = new TspTboxV2cKeyProvisionedProperties();
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
-        // 与生产环境一致：后注册兼容模块，数字按 epoch 毫秒解析（覆盖 JavaTimeModule 的 epoch 秒默认）
-        objectMapper.registerModule(new JacksonInstantCompatModule());
+        // 与生产装配一致（TSP-DSN-CR-013）：框架双读模块（ISO + 10 位秒/13 位毫秒）注册在 JavaTimeModule 之后
+        objectMapper.registerModule(new IovJavaTimeReadModule(ZoneId.of("Asia/Shanghai")));
         translator = new TboxV2cKeyProvisionedEventTranslator(objectMapper, properties);
     }
 

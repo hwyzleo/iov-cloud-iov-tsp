@@ -1,3 +1,16 @@
+# TSP-DSN-CR-013：JSON java.time 时间契约（兼容阶段）
+# 使用 FW-WEB iov.web.jackson.*（FW-WEB-DSN-CR-001）：
+#   date-format=epoch-millis：修复版本，保持存量毫秒数字输出（不输出数组/秒小数）；
+#   双读始终生效（ISO 字符串 + 10 位秒 + 13 位毫秒）；ISO 输出留待消费方就绪后切换（TSP-DSN-CR-013 §6/§7.3）。
+# zone-id 显式声明：与当前 Instant↔LocalDateTime 写入/读取路径使用的 JVM 默认时区一致（本地/生产 +08:00）；
+#   历史数据语义以真实生产样本核验为准（CR-013 P0 阻断项），切换 ISO 前必须完成核验。
+# 仅启动时生效；禁止 Nacos 全局共享配置热翻转（FW-WEB-DSN-CR-001 RD-001-4）。
+iov:
+  web:
+    jackson:
+      date-format: epoch-millis
+      zone-id: Asia/Shanghai
+
 spring:
   kafka:
     topics:

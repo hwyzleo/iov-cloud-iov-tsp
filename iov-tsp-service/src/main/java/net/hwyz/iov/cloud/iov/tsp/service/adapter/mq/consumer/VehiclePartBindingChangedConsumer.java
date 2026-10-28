@@ -5,6 +5,7 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.hwyz.iov.cloud.iov.tsp.service.adapter.mq.consumer.support.WireInstantParser;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.VehicleBindingProjectionAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.VehicleNetworkAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehiclePartBindingChangedEvent;
@@ -66,7 +67,8 @@ public class VehiclePartBindingChangedConsumer {
                                 .iccid2(event.getStr("iccid2"))
                                 .changeType(event.getStr("changeType"))
                                 .replaceOfBindingId(event.getLong("replaceOfBindingId"))
-                                .occurredAt(Instant.parse(event.getStr("occurredAt")))
+                                // TSP-DSN-CR-013：hutool 路径双读（ISO + 10 位秒/13 位毫秒），非法/缺失 fail-closed
+                                .occurredAt(WireInstantParser.parse(event.get("occurredAt")))
                                 .seq(event.getLong("seq"))
                                 .build();
 

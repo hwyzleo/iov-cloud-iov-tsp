@@ -1,12 +1,13 @@
 package net.hwyz.iov.cloud.iov.tsp.service.adapter.mq.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import net.hwyz.iov.cloud.framework.web.jackson.IovJavaTimeReadModule;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.mq.consumer.support.DeviceOnlineContractException;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.command.RecordTboxOnlineCmd;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.time.ZoneId;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -15,8 +16,10 @@ class DeviceOnlineEventTranslatorTest {
 
     private static final Instant RECEIVED_AT = Instant.parse("2026-10-10T08:00:30Z");
 
+    // TSP-DSN-CR-013：与生产装配一致（框架双读：ISO + 10 位秒/13 位毫秒）
     private final DeviceOnlineEventTranslator translator =
-            new DeviceOnlineEventTranslator(new ObjectMapper().registerModule(new JavaTimeModule()));
+            new DeviceOnlineEventTranslator(new ObjectMapper().findAndRegisterModules()
+                    .registerModule(new IovJavaTimeReadModule(ZoneId.of("Asia/Shanghai"))));
 
     private String payload(String overrides) {
         return "{\"eventId\":\"EVT-1\",\"eventType\":\"DEVICE_ONLINE\",\"hsmUid\":\"hsm-uid-0001\","
@@ -61,6 +64,24 @@ class DeviceOnlineEventTranslatorTest {
         String json = payload("").replace(",\"occurredAt\":\"2026-10-10T08:00:00Z\"", "");
         assertThrows(DeviceOnlineContractException.class,
                 () -> translator.translate("HSM-UID-0001", json, RECEIVED_AT, "t"));
+    }
+
+    @Test
+    void translate_EpochMillisOccurredAt_ShouldParseLegacyVagwPayload() {
+        // 旧版 VAGW（hutool）epoch 毫秒 wire：与 ISO 同一时刻（TSP-DSN-CR-013 双读）
+        String json = payload("").replace("\"occurredAt\":\"2026-10-10T08:00:00Z\"",
+                "\"occurredAt\":" + Instant.parse("2026-10-10T08:00:00Z").toEpochMilli());
+        RecordTboxOnlineCmd cmd = translator.translate("HSM-UID-0001", json, RECEIVED_AT, "vagw.device.online");
+        assertEquals(Instant.parse("2026-10-10T08:00:00Z"), cmd.occurredAt());
+    }
+
+    @Test
+    void translate_EpochSecondsOccurredAt_ShouldParse() {
+        // 10 位 epoch 秒（现代窗口内按秒归一，RD-001-2）
+        String json = payload("").replace("\"occurredAt\":\"2026-10-10T08:00:00Z\"",
+                "\"occurredAt\":" + Instant.parse("2026-10-10T08:00:00Z").getEpochSecond());
+        RecordTboxOnlineCmd cmd = translator.translate("HSM-UID-0001", json, RECEIVED_AT, "vagw.device.online");
+        assertEquals(Instant.parse("2026-10-10T08:00:00Z"), cmd.occurredAt());
     }
 
     @Test
