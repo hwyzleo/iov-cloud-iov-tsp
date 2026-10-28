@@ -3,6 +3,7 @@ package net.hwyz.iov.cloud.iov.tsp.service.adapter.mq.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.event.TboxV2cKeyProvisionedEvent;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.mq.consumer.support.TboxV2cKeyProvisionedContractException;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.JacksonInstantCompatModule;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspTboxV2cKeyProvisionedProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,8 +28,10 @@ class TboxV2cKeyProvisionedEventTranslatorTest {
     @BeforeEach
     void setUp() {
         properties = new TspTboxV2cKeyProvisionedProperties();
-        translator = new TboxV2cKeyProvisionedEventTranslator(
-                new ObjectMapper().findAndRegisterModules(), properties);
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        // 与生产环境一致：后注册兼容模块，数字按 epoch 毫秒解析（覆盖 JavaTimeModule 的 epoch 秒默认）
+        objectMapper.registerModule(new JacksonInstantCompatModule());
+        translator = new TboxV2cKeyProvisionedEventTranslator(objectMapper, properties);
     }
 
     private String payload() {
@@ -164,6 +167,18 @@ class TboxV2cKeyProvisionedEventTranslatorTest {
     void translate_MissingOccurredAt_ShouldReject() {
         assertCode("MISSING_OCCURRED_AT", SN,
                 payload().replace(",\n  \"occurredAt\": \"2026-10-19T08:00:00Z\"", ""));
+    }
+
+    @Test
+    void translate_EpochMillisOccurredAt_ShouldParseLegacyVmdPayload() {
+        // VMD 旧版生产者（hutool JSONUtil）将 occurredAt 序列化为 epoch 毫秒数字；
+        // 加固后应按 epoch 毫秒解析而非 Jackson 默认的 epoch 秒（否则误读为公元 58791 年）。
+        TboxV2cKeyProvisionedEvent event = translator.translate(TOPIC, SN,
+                payload().replace("\"occurredAt\": \"2026-10-19T08:00:00Z\"", "\"occurredAt\": 1792396800000"), NOW);
+
+        assertEquals(Instant.parse("2026-10-19T08:00:00Z"), event.getOccurredAt());
+        assertEquals(TboxV2cKeyProvisionedEvent.CONTRACT_VERSION_V1, event.getContractVersion());
+        assertEquals(2, event.getKeys().size());
     }
 
     @Test
