@@ -18,7 +18,7 @@ import org.mockito.quality.Strictness;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -96,13 +96,23 @@ class DeviceRegistrationDomainServiceTest {
         int updated = deviceRegistrationDomainService.recordSuccessfulLogin(TBOX_ID, SN, EVENT_ID, OCCURRED_AT, 12L);
 
         assertEquals(1, updated);
-        LocalDateTime expected = LocalDateTime.ofInstant(OCCURRED_AT, ZoneId.systemDefault());
+        // TSP-DSN-CR-014：事件时间显式 UTC 转换，不依赖 JVM 默认时区
+        LocalDateTime expected = LocalDateTime.ofInstant(OCCURRED_AT, ZoneOffset.UTC);
         ArgumentCaptor<LocalDateTime> captor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(tboxMapper).recordLoginById(eq(TBOX_ID), captor.capture(),
                 eq(DeviceStatus.PRE_ACTIVE.getCode()),
                 eq(DeviceStatus.ACTIVATING.getCode()),
                 eq(DeviceStatus.ACTIVE.getCode()));
         assertEquals(expected, captor.getValue());
+    }
+
+    @Test
+    void recordSuccessfulLogin_NullOccurredAt_ShouldNotFallbackNow() {
+        // TSP-DSN-CR-014（RD-TIME-006）：缺失来源时间禁止以当前时间兑底推进状态
+        int updated = deviceRegistrationDomainService.recordSuccessfulLogin(TBOX_ID, SN, EVENT_ID, null, 1L);
+
+        assertEquals(0, updated);
+        verify(tboxMapper, never()).recordLoginById(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -244,9 +254,23 @@ class DeviceRegistrationDomainServiceTest {
 
         assertEquals(ActivationOutcome.ACTIVATED, deviceRegistrationDomainService.completeActivation(validEvent()));
 
-        LocalDateTime expectedActivateTime = LocalDateTime.ofInstant(OCCURRED_AT, ZoneId.systemDefault());
+        // TSP-DSN-CR-014：activate_time 显式 UTC 转换
+        LocalDateTime expectedActivateTime = LocalDateTime.ofInstant(OCCURRED_AT, ZoneOffset.UTC);
         verify(tboxMapper).completeActivationById(TBOX_ID, expectedActivateTime,
                 DeviceStatus.ACTIVATING.getCode(), DeviceStatus.ACTIVE.getCode());
+    }
+
+    @Test
+    void completeActivation_NullOccurredAt_ShouldRejectContractWithoutFallback() {
+        // TSP-DSN-CR-014（RD-TIME-006）：缺失来源时间禁止以当前时间兑底推进激活
+        TboxV2cKeyProvisionedEvent event = validEvent();
+        event.setOccurredAt(null);
+        when(tboxMapper.selectBySn(SN)).thenReturn(tbox(DeviceStatus.ACTIVATING));
+        stubBinding(SN);
+
+        assertEquals(ActivationOutcome.REJECTED_CONTRACT,
+                deviceRegistrationDomainService.completeActivation(event));
+        verify(tboxMapper, never()).completeActivationById(any(), any(), any(), any());
     }
 
     @Test

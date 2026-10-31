@@ -3,12 +3,12 @@ package net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.repository
 import lombok.RequiredArgsConstructor;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.TboxRegistrationEventRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxRegistrationEventRecord;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.UtcTime;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.TboxRegistrationEventMapper;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.TboxRegistrationEventPo;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -64,9 +64,8 @@ public class TboxRegistrationEventRepositoryImpl implements TboxRegistrationEven
                 po.getRequestId(),
                 po.getDeviceSn(),
                 po.getEventType(),
-                po.getOccurredAt() != null
-                        ? po.getOccurredAt().atZone(ZoneId.systemDefault()).toInstant()
-                        : null,
+                // TSP-DSN-CR-014：Inbox occurred_at 按显式 UTC 墙钟存储/解释，不再依赖 JVM 默认时区
+                po.getOccurredAt() != null ? UtcTime.toInstant(po.getOccurredAt()) : null,
                 po.getProcessedAt(),
                 po.getResult(),
                 po.getContractDigest(),
@@ -75,6 +74,6 @@ public class TboxRegistrationEventRepositoryImpl implements TboxRegistrationEven
     }
 
     private LocalDateTime toLocalDateTime(java.time.Instant instant) {
-        return instant != null ? LocalDateTime.ofInstant(instant, ZoneId.systemDefault()) : null;
+        return UtcTime.toLocalDateTime(instant);
     }
 }

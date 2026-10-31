@@ -36,7 +36,8 @@ class MptTboxControllerIntegrationTest {
     @BeforeEach
     void setUp() {
         appService = mock(MptTboxQueryAppService.class);
-        MptTboxController controller = new MptTboxController(appService);
+        MptTboxController controller = new MptTboxController(appService,
+                new net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspDisplayProperties());
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
     }
 

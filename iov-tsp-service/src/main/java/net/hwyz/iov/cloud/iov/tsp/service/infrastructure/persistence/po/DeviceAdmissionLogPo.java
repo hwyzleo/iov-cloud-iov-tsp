@@ -103,7 +103,7 @@ public class DeviceAdmissionLogPo extends BasePo {
     /**
      * 证书检查完成时刻
      */
-    @TableField("checked_at")
+    @TableField(value = "checked_at", typeHandler = net.hwyz.iov.cloud.framework.mysql.typehandler.UtcInstantTypeHandler.class)
     private Instant checkedAt;
 
     /**

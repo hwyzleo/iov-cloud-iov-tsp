@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>
  * 与生产一致：加载 Spring Boot {@link JacksonAutoConfiguration} + FW-WEB
  * {@link IovJacksonAutoConfiguration}（iov.web.jackson.date-format=epoch-millis +
- * zone-id=Asia/Shanghai，等价 application.yml），注入实际生效的 Spring ObjectMapper，
+ * zone-id=UTC（TSP-DSN-CR-014 联动，等价 application.yml），注入实际生效的 Spring ObjectMapper，
  * 验证：MPT /list 五字段输出 epoch 毫秒数字（修复“数组”输出）、双读、启动探针、
  * 无关 customizer 共存（不再互相遮蔽）、Service/Feign VO 契约。
  * <p>
@@ -51,14 +51,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class TspJacksonTimeContractTest {
 
-    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
+    private static final ZoneId UTC_ZONE = ZoneId.of("UTC");
     private static final LocalDateTime SAMPLE_LOCAL = LocalDateTime.of(2026, 9, 2, 8, 0, 0);
     private static final Instant SAMPLE_INSTANT = Instant.parse("2026-09-02T00:00:00Z");
 
     private ApplicationContextRunner runner() {
         return new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class, IovJacksonAutoConfiguration.class))
-                .withPropertyValues("iov.web.jackson.date-format=epoch-millis", "iov.web.jackson.zone-id=Asia/Shanghai");
+                .withPropertyValues("iov.web.jackson.date-format=epoch-millis", "iov.web.jackson.zone-id=UTC");
     }
 
     private ObjectMapper productionMapper() {
@@ -131,7 +131,8 @@ class TspJacksonTimeContractTest {
                         .updatedAt(SAMPLE_LOCAL.plusDays(1))
                         .build()))
                 .total(1).page(1).size(20).build());
-        MptTboxController controller = new MptTboxController(appService);
+        MptTboxController controller = new MptTboxController(appService,
+                new net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspDisplayProperties());
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setMessageConverters(new MappingJackson2HttpMessageConverter(mapper))
                 .build();
@@ -266,6 +267,6 @@ class TspJacksonTimeContractTest {
     private static void assertEpochMillis(JsonNode node, LocalDateTime local) {
         assertTrue(node != null && node.isIntegralNumber(),
                 () -> "应为 epoch 毫秒数字，实际: " + node);
-        assertEquals(local.atZone(SHANGHAI).toInstant().toEpochMilli(), node.longValue());
+        assertEquals(local.atZone(UTC_ZONE).toInstant().toEpochMilli(), node.longValue());
     }
 }

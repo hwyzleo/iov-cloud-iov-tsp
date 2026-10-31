@@ -15,7 +15,7 @@
         <result column="uid_digest" property="uidDigest" />
         <result column="cert_serial_digest" property="certSerialDigest" />
         <result column="source_ip_digest" property="sourceIpDigest" />
-        <result column="checked_at" property="checkedAt" />
+        <result column="checked_at" property="checkedAt" typeHandler="net.hwyz.iov.cloud.framework.mysql.typehandler.UtcInstantTypeHandler" />
         <result column="revocation_source" property="revocationSource" />
         <result column="dependency_outcome" property="dependencyOutcome" />
         <result column="caller" property="caller" />
@@ -38,19 +38,19 @@
         description, create_time, create_by, modify_time, modify_by, row_version, row_valid
     </sql>
 
-    <!-- 插入 -->
+    <!-- 插入（TSP-DSN-CR-014：审计单属主，create_time/modify_time 由 DB DEFAULT/ON UPDATE 唯一生成；checkedAt 显式 UTC typeHandler） -->
     <insert id="insertPo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO tb_device_admission_log (
             id, vin, hsm, admission_result, reason, hsm_check_result, pki_check_result, device_status_check_result,
             uid_digest, cert_serial_digest, source_ip_digest, checked_at, revocation_source, dependency_outcome, caller,
             request_context, response_time_ms,
-            description, create_time, create_by, modify_time, modify_by, row_version, row_valid
+            description, create_by, modify_by, row_version, row_valid
         )
         VALUES (
             #{id}, #{vin}, NULL, #{admissionResult}, #{reason}, #{hsmCheckResult}, #{pkiCheckResult}, #{deviceStatusCheckResult},
-            #{uidDigest}, #{certSerialDigest}, #{sourceIpDigest}, #{checkedAt}, #{revocationSource}, #{dependencyOutcome}, #{caller},
+            #{uidDigest}, #{certSerialDigest}, #{sourceIpDigest}, #{checkedAt, typeHandler=net.hwyz.iov.cloud.framework.mysql.typehandler.UtcInstantTypeHandler}, #{revocationSource}, #{dependencyOutcome}, #{caller},
             #{requestContext}, #{responseTimeMs},
-            #{description}, now(), #{createBy}, now(), #{modifyBy}, 1, 1
+            #{description}, #{createBy}, #{modifyBy}, 1, 1
         )
     </insert>
 
@@ -60,15 +60,15 @@
             id, vin, hsm, admission_result, reason, hsm_check_result, pki_check_result, device_status_check_result,
             uid_digest, cert_serial_digest, source_ip_digest, checked_at, revocation_source, dependency_outcome, caller,
             request_context, response_time_ms,
-            description, create_time, create_by, modify_time, modify_by, row_version, row_valid
+            description, create_by, modify_by, row_version, row_valid
         )
         VALUES
         <foreach collection="list" item="item" index="index" separator=",">
         (
             #{item.id}, #{item.vin}, NULL, #{item.admissionResult}, #{item.reason}, #{item.hsmCheckResult}, #{item.pkiCheckResult}, #{item.deviceStatusCheckResult},
-            #{item.uidDigest}, #{item.certSerialDigest}, #{item.sourceIpDigest}, #{item.checkedAt}, #{item.revocationSource}, #{item.dependencyOutcome}, #{item.caller},
+            #{item.uidDigest}, #{item.certSerialDigest}, #{item.sourceIpDigest}, #{item.checkedAt, typeHandler=net.hwyz.iov.cloud.framework.mysql.typehandler.UtcInstantTypeHandler}, #{item.revocationSource}, #{item.dependencyOutcome}, #{item.caller},
             #{item.requestContext}, #{item.responseTimeMs},
-            #{item.description}, now(), #{item.createBy}, now(), #{item.modifyBy}, 1, 1
+            #{item.description}, #{item.createBy}, #{item.modifyBy}, 1, 1
         )
         </foreach>
     </insert>
@@ -107,7 +107,7 @@
             t.source_ip_digest = #{sourceIpDigest},
         </if>
         <if test="checkedAt != null">
-            t.checked_at = #{checkedAt},
+            t.checked_at = #{checkedAt, typeHandler=net.hwyz.iov.cloud.framework.mysql.typehandler.UtcInstantTypeHandler},
         </if>
         <if test="revocationSource != null and revocationSource != ''">
             t.revocation_source = #{revocationSource},
@@ -130,8 +130,7 @@
         <if test="modifyBy != null">
             t.modify_by = #{modifyBy},
         </if>
-        t.row_version = t.row_version + 1,
-        t.modify_time = now()
+        t.row_version = t.row_version + 1
         WHERE id = #{id}
     </update>
 
@@ -139,7 +138,6 @@
     <update id="logicalDeletePo" parameterType="Long">
         UPDATE tb_device_admission_log t SET
         t.row_version = t.row_version + 1,
-        t.modify_time = now(),
         t.row_valid = 0
         WHERE t.id = #{value}
     </update>

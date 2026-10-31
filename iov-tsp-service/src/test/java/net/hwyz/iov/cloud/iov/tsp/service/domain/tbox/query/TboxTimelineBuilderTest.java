@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,8 +28,9 @@ class TboxTimelineBuilderTest {
     private final TboxTimelineBuilder builder = new TboxTimelineBuilder();
 
     private TboxRegistrationEventRecord event(String eventId, String eventType, LocalDateTime occurredAt) {
+        // TSP-DSN-CR-014：Inbox occurred_at 按显式 UTC 墙钟存取，构造事件时间与 UTC 语义一致
         return new TboxRegistrationEventRecord(eventId, null, "SN-1", eventType,
-                occurredAt.atZone(ZoneId.systemDefault()).toInstant(), occurredAt, "SUCCEEDED", null);
+                occurredAt.atZone(ZoneOffset.UTC).toInstant(), occurredAt, "SUCCEEDED", null);
     }
 
     @Test

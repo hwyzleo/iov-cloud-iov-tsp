@@ -19,6 +19,7 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.request.MptTboxQueryRequest;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler.MptTboxVoAssembler;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.MptTboxSummaryResult;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.MptTboxQueryAppService;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspDisplayProperties;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,6 +42,7 @@ import java.util.List;
 public class MptTboxController extends BaseController {
 
     private final MptTboxQueryAppService mptTboxQueryAppService;
+    private final TspDisplayProperties tspDisplayProperties;
 
     /**
      * 分页查询 TBOX 列表
@@ -100,7 +102,8 @@ public class MptTboxController extends BaseController {
     @GetMapping(value = "/export")
     public void export(HttpServletResponse response, MptTboxQueryRequest request) {
         log.info("管理后台用户[{}]导出TBOX列表", SecurityContextHolder.getUserName());
-        List<MptTboxExportVo> exportList = MptTboxVoAssembler.INSTANCE.toExportVoList(mptTboxQueryAppService.export(request));
+        List<MptTboxExportVo> exportList = MptTboxVoAssembler.INSTANCE
+                .toExportVoList(mptTboxQueryAppService.export(request), tspDisplayProperties.zone());
         ExcelUtil<MptTboxExportVo> util = new ExcelUtil<>(MptTboxExportVo.class);
         util.exportExcel(response, exportList, "TBOX数据");
     }

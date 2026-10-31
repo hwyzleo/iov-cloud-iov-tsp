@@ -5,11 +5,11 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxManagementView;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxRegistrationEventRecord;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.query.model.TimelineMilestone;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.service.DeviceRegistrationDomainService;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.UtcTime;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -86,6 +86,7 @@ public class TboxTimelineBuilder {
     }
 
     private LocalDateTime toLocalDateTime(Instant instant) {
-        return instant != null ? LocalDateTime.ofInstant(instant, ZoneId.systemDefault()) : null;
+        // TSP-DSN-CR-014：时间线来源时间按显式 UTC 解释，不依赖 JVM 默认时区
+        return UtcTime.toLocalDateTime(instant);
     }
 }

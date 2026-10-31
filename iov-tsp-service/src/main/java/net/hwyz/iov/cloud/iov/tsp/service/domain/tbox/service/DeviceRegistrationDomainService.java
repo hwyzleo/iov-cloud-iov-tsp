@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.hwyz.iov.cloud.framework.common.util.StrUtil;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.event.TboxV2cKeyProvisionedEvent;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.UtcTime;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceStatus;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.VehicleTbox;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.VehicleTboxProjectionRepository;
@@ -15,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -79,9 +79,14 @@ public class DeviceRegistrationDomainService {
             log.warn("DEVICE_ONLINE 缺失已解析 TBOX 主键，deviceSn[{}]，忽略登录记录", deviceSn);
             return 0;
         }
-        LocalDateTime eventTime = occurredAt != null
-                ? LocalDateTime.ofInstant(occurredAt, ZoneId.systemDefault())
-                : LocalDateTime.now();
+        // TSP-DSN-CR-014：来源时间必须为合法事件时间（occurredAt），显式 UTC 转换；
+        // 缺失/非法来源时间禁止以当前时间（now）兑底推进状态（RD-TIME-006）。
+        LocalDateTime eventTime = UtcTime.toLocalDateTime(occurredAt);
+        if (eventTime == null) {
+            log.warn("DEVICE_ONLINE 缺失来源时间(occurredAt)，禁止兑底推进状态, deviceSn[{}], eventId[{}]",
+                    deviceSn, eventId);
+            return 0;
+        }
         log.debug("处理设备上线事件, tboxId={}, deviceSn={}, eventId={}, generation={}, occurredAt={}",
                 tboxId, deviceSn, eventId, connectionGeneration, eventTime);
 
@@ -165,9 +170,14 @@ public class DeviceRegistrationDomainService {
         }
 
         // ACTIVATING -> ACTIVE（按已解析主键条件更新，保证并发幂等与 set-once activateTime）
-        LocalDateTime activateTime = event.getOccurredAt() != null
-                ? LocalDateTime.ofInstant(event.getOccurredAt(), ZoneId.systemDefault())
-                : LocalDateTime.now();
+        // TSP-DSN-CR-014：activate_time 必须为合法事件时间（occurredAt）显式 UTC 转换，
+        // 缺失/非法来源时间禁止以当前时间兑底推进激活（RD-TIME-006）。
+        LocalDateTime activateTime = UtcTime.toLocalDateTime(event.getOccurredAt());
+        if (activateTime == null) {
+            log.warn("V2C 聚合完成事件缺失来源时间(occurredAt)，禁止兑底推进激活, deviceSn={}, requestId={}",
+                    deviceSn, requestId);
+            return ActivationOutcome.REJECTED_CONTRACT;
+        }
         int updated = tboxMapper.completeActivationById(tbox.getId(), activateTime,
                 DeviceStatus.ACTIVATING.getCode(),
                 DeviceStatus.ACTIVE.getCode());

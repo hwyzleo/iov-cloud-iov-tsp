@@ -87,7 +87,7 @@ public class VehicleCcpPo extends BasePo {
     /**
      * 最近事件时间
      */
-    @TableField("last_event_time")
+    @TableField(value = "last_event_time", typeHandler = net.hwyz.iov.cloud.framework.mysql.typehandler.UtcInstantTypeHandler.class)
     private Instant lastEventTime;
 
     /**

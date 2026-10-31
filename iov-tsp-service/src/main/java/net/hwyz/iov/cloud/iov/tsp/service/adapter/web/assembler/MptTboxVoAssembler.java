@@ -16,6 +16,9 @@ import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.TboxTimelineIte
 import org.mapstruct.Mapper;
 import org.mapstruct.factory.Mappers;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -43,11 +46,15 @@ public interface MptTboxVoAssembler {
 
     /**
      * 摘要结果转导出项（沿用查询脱敏结果，不提升敏感度）
+     * <p>
+     * TSP-DSN-CR-014：导出时间字段由 UTC 墙钟转换为展示时区墙钟（默认 Asia/Shanghai），
+     * 面向中国运营人员按本地时间查看；JSON 接口仍输出 epoch 数字（绝对时刻）不受影响。
      *
      * @param result 摘要结果
+     * @param displayZone 展示时区（UTC 墙钟 → 展示时区墙钟）
      * @return 导出项
      */
-    default MptTboxExportVo toExportVo(MptTboxSummaryResult result) {
+    default MptTboxExportVo toExportVo(MptTboxSummaryResult result, ZoneId displayZone) {
         if (result == null) {
             return null;
         }
@@ -56,9 +63,9 @@ public interface MptTboxVoAssembler {
                 .vin(result.getVin())
                 .partCode(result.getPartCode())
                 .deviceStatus(result.getDeviceStatus() == null ? null : String.valueOf(result.getDeviceStatus()))
-                .firstLoginTime(result.getFirstLoginTime())
-                .lastLoginTime(result.getLastLoginTime())
-                .activateTime(result.getActivateTime())
+                .firstLoginTime(toDisplay(result.getFirstLoginTime(), displayZone))
+                .lastLoginTime(toDisplay(result.getLastLoginTime(), displayZone))
+                .activateTime(toDisplay(result.getActivateTime(), displayZone))
                 .bindingStatus(result.getBindingStatus() == null ? null : result.getBindingStatus().name())
                 .anomalyTags(result.getAnomalyTags() == null ? null : result.getAnomalyTags().stream()
                         .map(tag -> tag.getType().name())
@@ -72,8 +79,8 @@ public interface MptTboxVoAssembler {
                 .hardwareVersion(result.getHardwareVersion())
                 .softwareVersion(result.getSoftwareVersion())
                 .bindingVersion(result.getBindingVersion())
-                .createdAt(result.getCreatedAt())
-                .updatedAt(result.getUpdatedAt())
+                .createdAt(toDisplay(result.getCreatedAt(), displayZone))
+                .updatedAt(toDisplay(result.getUpdatedAt(), displayZone))
                 .build();
     }
 
@@ -81,12 +88,27 @@ public interface MptTboxVoAssembler {
      * 摘要结果列表转导出项列表
      *
      * @param results 摘要结果列表
+     * @param displayZone 展示时区
      * @return 导出项列表
      */
-    default List<MptTboxExportVo> toExportVoList(List<MptTboxSummaryResult> results) {
+    default List<MptTboxExportVo> toExportVoList(List<MptTboxSummaryResult> results, ZoneId displayZone) {
         if (results == null) {
             return List.of();
         }
-        return results.stream().map(this::toExportVo).toList();
+        return results.stream().map(result -> toExportVo(result, displayZone)).toList();
+    }
+
+    /**
+     * UTC 墙钟（DB 存储语义）→ 展示时区墙钟（用于 Excel 等后端展示格式化）。
+     *
+     * @param utcWall DB 读出的 UTC 墙钟 LocalDateTime
+     * @param displayZone 展示时区
+     * @return 展示时区墙钟 LocalDateTime；null 透传
+     */
+    default LocalDateTime toDisplay(LocalDateTime utcWall, ZoneId displayZone) {
+        if (utcWall == null || displayZone == null) {
+            return utcWall;
+        }
+        return utcWall.atOffset(ZoneOffset.UTC).atZoneSameInstant(displayZone).toLocalDateTime();
     }
 }

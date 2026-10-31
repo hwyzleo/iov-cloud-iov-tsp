@@ -24,18 +24,18 @@
     <!-- 通用查询结果列 -->
     <sql id="baseColumnList">
         id, vin, slot_no, iccid, sim_status, realname_status, package_code, source_version,
-        description, create_time, create_by, modify_time, modify_by, row_version, row_valid
+        description, create_by, modify_by, row_version, row_valid
     </sql>
 
     <!-- 插入 -->
     <insert id="insertPo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO tb_vehicle_sim (
             id, vin, slot_no, iccid, sim_status, realname_status, package_code, source_version,
-            description, create_time, create_by, modify_time, modify_by, row_version, row_valid
+            description, create_by, modify_by, row_version, row_valid
         )
         VALUES (
             #{id}, #{vin}, #{slotNo}, #{iccid}, #{simStatus}, #{realnameStatus}, #{packageCode}, #{sourceVersion},
-            #{description}, now(), #{createBy}, now(), #{modifyBy}, 1, 1
+            #{description}, #{createBy}, #{modifyBy}, 1, 1
         )
     </insert>
 
@@ -43,13 +43,13 @@
     <insert id="batchInsertPo" useGeneratedKeys="true" keyProperty="id" parameterType="java.util.List">
         INSERT INTO tb_vehicle_sim (
             id, vin, slot_no, iccid, sim_status, realname_status, package_code, source_version,
-            description, create_time, create_by, modify_time, modify_by, row_version, row_valid
+            description, create_by, modify_by, row_version, row_valid
         )
         VALUES
         <foreach collection="list" item="item" index="index" separator=",">
         (
             #{item.id}, #{item.vin}, #{item.slotNo}, #{item.iccid}, #{item.simStatus}, #{item.realnameStatus}, #{item.packageCode}, #{item.sourceVersion},
-            #{item.description}, now(), #{item.createBy}, now(), #{item.modifyBy}, 1, 1
+            #{item.description}, #{item.createBy}, #{item.modifyBy}, 1, 1
         )
         </foreach>
     </insert>
@@ -84,8 +84,7 @@
         <if test="modifyBy != null">
             t.modify_by = #{modifyBy},
         </if>
-        t.row_version = t.row_version + 1,
-        t.modify_time = now()
+        t.row_version = t.row_version + 1
         WHERE id = #{id}
     </update>
 
@@ -93,7 +92,6 @@
     <update id="logicalDeletePo" parameterType="Long">
         UPDATE tb_vehicle_sim t SET
         t.row_version = t.row_version + 1,
-        t.modify_time = now(),
         t.row_valid = 0
         WHERE t.id = #{value}
     </update>
@@ -194,8 +192,7 @@
         t.sim_status = #{simStatus},
         t.realname_status = #{realnameStatus},
         t.source_version = #{version},
-        t.row_version = t.row_version + 1,
-        t.modify_time = now()
+        t.row_version = t.row_version + 1
         WHERE t.iccid = #{iccid}
         AND t.row_valid = 1
         AND (t.source_version IS NULL OR #{version} > t.source_version)
@@ -205,8 +202,7 @@
     <update id="updateIccidByVinAndSlot">
         UPDATE tb_vehicle_sim t SET
         t.iccid = #{iccid},
-        t.row_version = t.row_version + 1,
-        t.modify_time = now()
+        t.row_version = t.row_version + 1
         WHERE t.vin = #{vin}
         AND t.slot_no = #{slotNo}
         AND t.row_valid = 1
