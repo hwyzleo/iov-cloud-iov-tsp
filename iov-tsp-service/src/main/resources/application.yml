@@ -1,30 +1,3 @@
-# TSP-DSN-CR-013：JSON java.time 时间契约（兼容阶段）
-# 使用 FW-WEB iov.web.jackson.*（FW-WEB-DSN-CR-001）：
-#   date-format=epoch-millis：修复版本，保持存量毫秒数字输出（不输出数组/秒小数）；
-#   双读始终生效（ISO 字符串 + 10 位秒 + 13 位毫秒）；ISO 输出留待消费方就绪后切换（TSP-DSN-CR-013 §6/§7.3）。
-# zone-id=UTC（TSP-DSN-CR-014 联动）：LocalDateTime 的 epoch 数字输出按该 zone 解释；
-#   DB 时间墙钟已随 CR-014 改为显式 UTC（登录/激活/Inbox/投影来源），JVM/探针要求 UTC，
-#   故 JSON 解释 zone 必须为 UTC，否则输出偏移 8 小时。历史存量（旧上海墙钟）语义以真实样本核验为准（P 级）。
-# 仅启动时生效；禁止 Nacos 全局共享配置热翻转（FW-WEB-DSN-CR-001 RD-001-4）。
-iov:
-  web:
-    jackson:
-      date-format: epoch-millis
-      zone-id: UTC
-  # TSP-DSN-CR-014：FW-MYSQL UTC 治理（启动探针 + Druid 会话 UTC 初始化）。
-  # 默认开启探针（true）：校验 JVM/OS 时区（-Duser.timezone=UTC、容器 TZ=UTC）、URL 参数
-  # （connectionTimeZone=UTC & forceConnectionTimeZoneToSession=true & preserveInstants=true）、
-  # Druid 会话初始化（SET time_zone='+00:00'）与真实连接会话；任一不满足 fail-fast 阻断启动。
-  # 需要临时关闭时设 IOV_MYSQL_TIME_ENABLED=false（探针跳过，UTC 映射/会话初始化仍生效）。
-  mysql:
-    time:
-      enabled: ${IOV_MYSQL_TIME_ENABLED:true}
-  # FW-KAFKA Topic Provisioning：TSP 仅为自产的失败隔离 DLT Topic 声明创建定义；
-  # vagw.device.online 由 VAGW 作为 Producer/Provisioning Owner，TSP 只消费、不重复声明。
-  kafka:
-    topic-provisioning:
-      enabled: true
-
 spring:
   # TSP-DSN-CR-014：Druid 会话 UTC 初始化（RD-TIME-003 等价 initSql）。
   # 与 Nacos mysql.yaml 的 spring.datasource.* 键级合并；若生产已含同名配置，以生产为准并保持一致。
