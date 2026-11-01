@@ -27,14 +27,21 @@ import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.MptTboxTimeline
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.TboxAnomalyTagResult;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.TboxLinkKeysResult;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.TboxTimelineItemResult;
+import net.hwyz.iov.cloud.framework.common.util.ExplicitTimeUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * MPT TBOX 后台运营查询应用服务
@@ -61,16 +68,33 @@ public class MptTboxQueryAppService {
     private final TboxManagementProperties tboxManagementProperties;
 
     /**
+     * TSP-DSN-CR-015 RD-MPT-TZ-008：派生计算（异常标签阈值/离线时长/筛选边界）使用可测试 UTC Clock，
+     * 禁止依赖 JVM 默认时区；需要 LDT 时显式 UTC。
+     */
+    private Clock clock = Clock.systemUTC();
+
+    /** 时间筛选参数显式 offset 后缀（wall-clock+offset，DST overlap 消歧） */
+    private static final Pattern OFFSET_SUFFIX = Pattern.compile("^(.*?)([+-]\\d{2}:\\d{2})$");
+
+    void setClock(Clock clock) {
+        this.clock = clock;
+    }
+
+    private LocalDateTime nowUtc() {
+        return LocalDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+    }
+
+    /**
      * 分页查询 TBOX 列表
      *
      * @param request 查询请求
      * @return 分页结果
      */
     @Transactional(readOnly = true)
-    public PageResult<MptTboxSummaryResult> search(MptTboxQueryRequest request) {
+    public PageResult<MptTboxSummaryResult> search(MptTboxQueryRequest request, ZoneId effectiveZone) {
         long startNanos = System.nanoTime();
-        LocalDateTime now = LocalDateTime.now();
-        TboxManagementCriteria criteria = buildCriteria(request, now);
+        LocalDateTime now = nowUtc();
+        TboxManagementCriteria criteria = buildCriteria(request, effectiveZone, now);
         int pageNo = normalizePageNo(request);
         int pageSize = normalizePageSize(request);
 
@@ -101,7 +125,7 @@ public class MptTboxQueryAppService {
     @Transactional(readOnly = true)
     public MptTboxDetailResult getDetail(String sn) {
         long startNanos = System.nanoTime();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowUtc();
         TboxManagementView view = tboxManagementQueryService.getBySn(sn);
         List<AnomalyTag> tags = evaluateAnomalies(view, now);
         List<TboxRegistrationEventRecord> events = loadInboxQuietly(view.getSn());
@@ -163,11 +187,11 @@ public class MptTboxQueryAppService {
      * @return 导出项列表
      */
     @Transactional(readOnly = true)
-    public List<MptTboxSummaryResult> export(MptTboxQueryRequest request) {
+    public List<MptTboxSummaryResult> export(MptTboxQueryRequest request, ZoneId effectiveZone) {
         long startNanos = System.nanoTime();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = nowUtc();
         int maxRows = Math.max(tboxManagementProperties.getExportMaxRows(), 1);
-        TboxManagementCriteria criteria = buildCriteria(request, now);
+        TboxManagementCriteria criteria = buildCriteria(request, effectiveZone, now);
 
         PageUtil.startPage(1, maxRows + 1);
         try {
@@ -185,7 +209,19 @@ public class MptTboxQueryAppService {
         }
     }
 
-    private TboxManagementCriteria buildCriteria(MptTboxQueryRequest request, LocalDateTime now) {
+    private TboxManagementCriteria buildCriteria(MptTboxQueryRequest request, ZoneId effectiveZone, LocalDateTime now) {
+        LocalDateTime firstLoginFrom = parseRangeParam(request.getFirstLoginFrom(), effectiveZone, "firstLoginFrom");
+        LocalDateTime firstLoginTo = parseRangeParam(request.getFirstLoginTo(), effectiveZone, "firstLoginTo");
+        LocalDateTime lastLoginFrom = parseRangeParam(request.getLastLoginFrom(), effectiveZone, "lastLoginFrom");
+        LocalDateTime lastLoginTo = parseRangeParam(request.getLastLoginTo(), effectiveZone, "lastLoginTo");
+        LocalDateTime activateFrom = parseRangeParam(request.getActivateFrom(), effectiveZone, "activateFrom");
+        LocalDateTime activateTo = parseRangeParam(request.getActivateTo(), effectiveZone, "activateTo");
+        LocalDateTime createdFrom = parseRangeParam(request.getCreatedFrom(), effectiveZone, "createdFrom");
+        LocalDateTime createdTo = parseRangeParam(request.getCreatedTo(), effectiveZone, "createdTo");
+        validateRange(firstLoginFrom, firstLoginTo, "firstLogin");
+        validateRange(lastLoginFrom, lastLoginTo, "lastLogin");
+        validateRange(activateFrom, activateTo, "activate");
+        validateRange(createdFrom, createdTo, "created");
         return TboxManagementCriteria.builder()
                 .sn(trimToNull(request.getSn()))
                 .vin(trimToNull(request.getVin()))
@@ -193,19 +229,55 @@ public class MptTboxQueryAppService {
                 .deviceStatus(request.getDeviceStatus())
                 .bindingStatus(parseBindingStatusName(request.getBindingStatus()))
                 .anomalyType(parseAnomalyTypeName(request.getAnomalyType()))
-                .firstLoginFrom(request.getFirstLoginFrom())
-                .firstLoginTo(request.getFirstLoginTo())
-                .lastLoginFrom(request.getLastLoginFrom())
-                .lastLoginTo(request.getLastLoginTo())
-                .activateFrom(request.getActivateFrom())
-                .activateTo(request.getActivateTo())
-                .createdFrom(request.getCreatedFrom())
-                .createdTo(request.getCreatedTo())
+                .firstLoginFrom(firstLoginFrom)
+                .firstLoginTo(firstLoginTo)
+                .lastLoginFrom(lastLoginFrom)
+                .lastLoginTo(lastLoginTo)
+                .activateFrom(activateFrom)
+                .activateTo(activateTo)
+                .createdFrom(createdFrom)
+                .createdTo(createdTo)
                 .activationTimeoutBefore(now.minus(tboxManagementProperties.getActivationTimeout()))
                 .longOfflineBefore(now.minus(tboxManagementProperties.getLongOfflineThreshold()))
                 .sortBy(normalizeSortBy(request.getSortBy()))
                 .sortAsc(normalizeSortAsc(request.getSortDirection()))
                 .build();
+    }
+
+    /**
+     * TSP-DSN-CR-015 RD-MPT-TZ-004：将「展示时区墙钟」筛选文本严格解析为 UTC 墙钟查询值。
+     * 空/空白 → null；无 offset 文本按有效 zone 严格解析（DST gap 拒绝、overlap 无 offset 拒绝）；
+     * 带显式 offset 时校验其属于该地区该墙钟的有效 offset 集合；非法输入抛 INVALID_QUERY_PARAM。
+     */
+    private LocalDateTime parseRangeParam(String raw, ZoneId effectiveZone, String fieldName) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String text = raw.trim();
+        try {
+            Instant instant;
+            Matcher offsetMatcher = OFFSET_SUFFIX.matcher(text);
+            if (offsetMatcher.matches()) {
+                LocalDateTime wall = ExplicitTimeUtil.parseLocalDateTimeIso(offsetMatcher.group(1));
+                ZoneOffset offset = ZoneOffset.of(offsetMatcher.group(2));
+                instant = ExplicitTimeUtil.resolveLocalDateTime(wall, effectiveZone, offset);
+            } else {
+                LocalDateTime wall = ExplicitTimeUtil.parseLocalDateTimeIso(text);
+                instant = ExplicitTimeUtil.resolveLocalDateTime(wall, effectiveZone);
+            }
+            return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
+        } catch (Exception e) {
+            log.warn("MPT TBOX 时间筛选参数非法 field={}, value={}, zone={}", fieldName, raw, effectiveZone, e);
+            throw new BusinessException(MptTboxErrorCode.INVALID_QUERY_PARAM,
+                    "非法的时间筛选参数: " + fieldName + "=" + raw);
+        }
+    }
+
+    private void validateRange(LocalDateTime from, LocalDateTime to, String fieldName) {
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new BusinessException(MptTboxErrorCode.INVALID_QUERY_PARAM,
+                    "时间筛选范围非法: " + fieldName + "From 不能晚于 " + fieldName + "To");
+        }
     }
 
     private List<MptTboxSummaryResult> toSummaries(List<TboxManagementView> views, LocalDateTime now) {

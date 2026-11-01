@@ -1,8 +1,13 @@
 package net.hwyz.iov.cloud.iov.tsp.service.adapter.web.controller.mpt;
 
 import net.hwyz.iov.cloud.framework.common.bean.PageResult;
-import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.TboxBindingStatus;
-import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.TboxTimelineMilestone;
+import net.hwyz.iov.cloud.framework.web.properties.IovRequestTimeZoneProperties;
+import net.hwyz.iov.cloud.framework.web.timezone.DisplayTimeFacade;
+import net.hwyz.iov.cloud.framework.web.timezone.RequestTimeZoneFallbackResolver;
+import net.hwyz.iov.cloud.framework.web.timezone.RequestTimeZoneInterceptor;
+import net.hwyz.iov.cloud.framework.web.timezone.RequestTimeZoneSnapshotResolver;
+import net.hwyz.iov.cloud.framework.web.timezone.AuthenticatedUserTimeZoneResolver;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.TboxBindingStatus;import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.TboxTimelineMilestone;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.MptTboxDetailResult;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.MptTboxSummaryResult;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.MptTboxTimelineResult;
@@ -11,6 +16,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.TboxTimelineIte
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.MptTboxQueryAppService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -36,9 +42,16 @@ class MptTboxControllerIntegrationTest {
     @BeforeEach
     void setUp() {
         appService = mock(MptTboxQueryAppService.class);
-        MptTboxController controller = new MptTboxController(appService,
-                new net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspDisplayProperties());
-        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        // TSP-DSN-CR-015：接入真实框架时区解析链（拦截器绑定快照 → DisplayTimeFacade 读取）
+        IovRequestTimeZoneProperties tzProperties = new IovRequestTimeZoneProperties();
+        ObjectProvider<AuthenticatedUserTimeZoneResolver> userProvider = mock(ObjectProvider.class);
+        ObjectProvider<List<RequestTimeZoneFallbackResolver>> fallbackProvider = mock(ObjectProvider.class);
+        RequestTimeZoneSnapshotResolver snapshotResolver =
+                new RequestTimeZoneSnapshotResolver(tzProperties, userProvider, fallbackProvider);
+        RequestTimeZoneInterceptor interceptor = new RequestTimeZoneInterceptor(snapshotResolver);
+        DisplayTimeFacade facade = new DisplayTimeFacade(tzProperties, fallbackProvider);
+        MptTboxController controller = new MptTboxController(appService, facade);
+        mockMvc = MockMvcBuilders.standaloneSetup(controller).addInterceptors(interceptor).build();
     }
 
     private MptTboxSummaryResult summary() {
@@ -56,7 +69,7 @@ class MptTboxControllerIntegrationTest {
 
     @Test
     void list_ShouldReturnPagedItems() throws Exception {
-        when(appService.search(any())).thenReturn(PageResult.<MptTboxSummaryResult>builder()
+        when(appService.search(any(), any())).thenReturn(PageResult.<MptTboxSummaryResult>builder()
                 .items(List.of(summary())).total(1).page(1).size(20).build());
 
         mockMvc.perform(get("/api/mpt/tbox/v1/list"))
@@ -99,11 +112,11 @@ class MptTboxControllerIntegrationTest {
 
     @Test
     void export_ShouldRouteToExportEndpoint() throws Exception {
-        when(appService.export(any())).thenReturn(List.of(summary()));
+        when(appService.export(any(), any())).thenReturn(List.of(summary()));
 
         mockMvc.perform(get("/api/mpt/tbox/v1/export"))
                 .andExpect(status().isOk());
 
-        verify(appService).export(any());
+        verify(appService).export(any(), any());
     }
 }

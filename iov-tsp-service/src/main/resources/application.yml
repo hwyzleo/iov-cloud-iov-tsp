@@ -9,12 +9,6 @@ spring:
       reactive-concurrency: 3
 
 tsp:
-  # 展示时区（TSP-DSN-CR-014）：面向运营/用户的展示场景（Excel 导出等后端格式化）使用的时区。
-  # 存储/传输始终为 UTC（JVM UTC、DB UTC 墙钟、JSON epoch 输出 zone-id=UTC）；
-  # 此配置仅决定后端展示层把 UTC 墙钟转换为哪个时区的墙钟显示（默认中国 Asia/Shanghai）。
-  # JSON API（/list 等）输出 epoch 数字（绝对时刻），展示时区由前端自行转换，不受此配置影响。
-  display:
-    zone-id: ${TSP_DISPLAY_ZONE_ID:Asia/Shanghai}
   kafka:
     # DEVICE_ONLINE 消费者（TSP-DSN-CR-010）：独立 Consumer Group，手动 ack + Retry/DLT
     device-online:

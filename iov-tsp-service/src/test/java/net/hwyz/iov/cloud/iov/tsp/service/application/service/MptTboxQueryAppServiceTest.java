@@ -11,6 +11,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.MptTboxTimeline
 import net.hwyz.iov.cloud.iov.tsp.service.common.exception.MptTboxErrorCode;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.TboxManagementQueryRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.TboxRegistrationEventRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxManagementCriteria;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxManagementView;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.query.TboxAnomalyEvaluator;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.query.TboxManagementQueryService;
@@ -19,8 +20,11 @@ import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TboxManagementPr
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.mockito.ArgumentCaptor;
+
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -38,6 +43,7 @@ import static org.mockito.Mockito.when;
 class MptTboxQueryAppServiceTest {
 
     private static final LocalDateTime NOW = LocalDateTime.now();
+    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
 
     private TboxManagementQueryService queryService;
     private TboxRegistrationEventRepository registrationEventRepository;
@@ -80,7 +86,7 @@ class MptTboxQueryAppServiceTest {
     void search_ShouldMaskSensitiveFieldsAndReturnPage() {
         when(queryService.search(any())).thenReturn(List.of(view("SN-1"), view("SN-2")));
 
-        PageResult<MptTboxSummaryResult> page = appService.search(MptTboxQueryRequest.builder().build());
+        PageResult<MptTboxSummaryResult> page = appService.search(MptTboxQueryRequest.builder().build(), SHANGHAI);
 
         assertEquals(2, page.getItems().size());
         assertEquals(2, page.getTotal());
@@ -100,7 +106,7 @@ class MptTboxQueryAppServiceTest {
         unbound.setVin(null);
         when(queryService.search(any())).thenReturn(List.of(unbound));
 
-        MptTboxSummaryResult result = appService.search(MptTboxQueryRequest.builder().build()).getItems().get(0);
+        MptTboxSummaryResult result = appService.search(MptTboxQueryRequest.builder().build(), SHANGHAI).getItems().get(0);
 
         assertEquals(TboxBindingStatus.UNBOUND, result.getBindingStatus());
         assertTrue(result.getAnomalyTags().stream().anyMatch(t -> t.getType() == TboxAnomalyType.UNBOUND));
@@ -110,7 +116,7 @@ class MptTboxQueryAppServiceTest {
     void search_InvalidSortBy_ShouldThrowInvalidQueryParam() {
         MptTboxQueryRequest request = MptTboxQueryRequest.builder().sortBy("evil;drop table").build();
 
-        BusinessException ex = assertThrows(BusinessException.class, () -> appService.search(request));
+        BusinessException ex = assertThrows(BusinessException.class, () -> appService.search(request, SHANGHAI));
         assertEquals(MptTboxErrorCode.INVALID_QUERY_PARAM, ex.getErrorCode());
     }
 
@@ -142,7 +148,7 @@ class MptTboxQueryAppServiceTest {
     void export_WithinLimit_ShouldReturnItems() {
         when(queryService.search(any())).thenReturn(List.of(view("SN-1")));
 
-        List<MptTboxSummaryResult> items = appService.export(MptTboxQueryRequest.builder().build());
+        List<MptTboxSummaryResult> items = appService.export(MptTboxQueryRequest.builder().build(), SHANGHAI);
 
         assertEquals(1, items.size());
     }
@@ -152,7 +158,7 @@ class MptTboxQueryAppServiceTest {
         when(queryService.search(any())).thenReturn(List.of(view("SN-1"), view("SN-2"), view("SN-3")));
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> appService.export(MptTboxQueryRequest.builder().build()));
+                () -> appService.export(MptTboxQueryRequest.builder().build(), SHANGHAI));
         assertEquals(MptTboxErrorCode.EXPORT_LIMIT_EXCEEDED, ex.getErrorCode());
     }
 
@@ -161,8 +167,81 @@ class MptTboxQueryAppServiceTest {
         when(queryService.search(any())).thenReturn(List.of(view("SN-1")));
 
         PageResult<MptTboxSummaryResult> page = appService.search(
-                MptTboxQueryRequest.builder().pageNo(1).pageSize(9999).build());
+                MptTboxQueryRequest.builder().pageNo(1).pageSize(9999).build(), SHANGHAI);
 
         assertEquals(200, page.getSize());
+    }
+
+    // ---------- TSP-DSN-CR-015 RD-MPT-TZ-004：时间筛选对称解析 ----------
+
+    @Test
+    void search_ShanghaiTimeRange_ShouldConvertToUtcWallClockCriteria() {
+        when(queryService.search(any())).thenReturn(List.of(view("SN-1")));
+
+        appService.search(MptTboxQueryRequest.builder()
+                .lastLoginFrom("2026-11-01T15:00:00")
+                .lastLoginTo("2026-11-01T16:00:00")
+                .build(), SHANGHAI);
+
+        ArgumentCaptor<TboxManagementCriteria> captor = ArgumentCaptor.forClass(TboxManagementCriteria.class);
+        verify(queryService).search(captor.capture());
+        assertEquals(LocalDateTime.of(2026, 11, 1, 7, 0, 0), captor.getValue().getLastLoginFrom());
+        assertEquals(LocalDateTime.of(2026, 11, 1, 8, 0, 0), captor.getValue().getLastLoginTo());
+    }
+
+    @Test
+    void search_UtcZoneTimeRange_ShouldKeepWallClock() {
+        when(queryService.search(any())).thenReturn(List.of(view("SN-1")));
+
+        appService.search(MptTboxQueryRequest.builder()
+                .lastLoginFrom("2026-11-01T15:00:00")
+                .build(), ZoneId.of("UTC"));
+
+        ArgumentCaptor<TboxManagementCriteria> captor = ArgumentCaptor.forClass(TboxManagementCriteria.class);
+        verify(queryService).search(captor.capture());
+        assertEquals(LocalDateTime.of(2026, 11, 1, 15, 0, 0), captor.getValue().getLastLoginFrom());
+    }
+
+    @Test
+    void search_InvalidOrReversedTimeRange_ShouldThrowInvalidQueryParam() {
+        BusinessException invalid = assertThrows(BusinessException.class,
+                () -> appService.search(MptTboxQueryRequest.builder()
+                        .lastLoginFrom("not-a-time").build(), SHANGHAI));
+        assertEquals(MptTboxErrorCode.INVALID_QUERY_PARAM, invalid.getErrorCode());
+
+        BusinessException reversed = assertThrows(BusinessException.class,
+                () -> appService.search(MptTboxQueryRequest.builder()
+                        .lastLoginFrom("2026-11-01T16:00:00")
+                        .lastLoginTo("2026-11-01T15:00:00").build(), SHANGHAI));
+        assertEquals(MptTboxErrorCode.INVALID_QUERY_PARAM, reversed.getErrorCode());
+    }
+
+    @Test
+    void search_DstGapWithoutOffset_ShouldReject() {
+        // Berlin 2026-03-29T02:30 处于 spring-forward gap，无 offset 必须拒绝
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> appService.search(MptTboxQueryRequest.builder()
+                        .lastLoginFrom("2026-03-29T02:30:00").build(), ZoneId.of("Europe/Berlin")));
+        assertEquals(MptTboxErrorCode.INVALID_QUERY_PARAM, ex.getErrorCode());
+    }
+
+    @Test
+    void search_DstOverlapWithoutOffset_ShouldReject() {
+        // Berlin 2026-10-25T02:30 秋季重叠，无 offset 必须拒绝
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> appService.search(MptTboxQueryRequest.builder()
+                        .lastLoginFrom("2026-10-25T02:30:00").build(), ZoneId.of("Europe/Berlin")));
+        assertEquals(MptTboxErrorCode.INVALID_QUERY_PARAM, ex.getErrorCode());
+    }
+
+    @Test
+    void search_DstOverlapWithExplicitOffset_ShouldResolve() {
+        // Berlin 2026-10-25T02:30 +02:00 → UTC 墙钟 2026-10-25T00:30
+        when(queryService.search(any())).thenReturn(List.of(view("SN-1")));
+        appService.search(MptTboxQueryRequest.builder()
+                .lastLoginFrom("2026-10-25T02:30:00+02:00").build(), ZoneId.of("Europe/Berlin"));
+        ArgumentCaptor<TboxManagementCriteria> captor = ArgumentCaptor.forClass(TboxManagementCriteria.class);
+        verify(queryService).search(captor.capture());
+        assertEquals(LocalDateTime.of(2026, 10, 25, 0, 30, 0), captor.getValue().getLastLoginFrom());
     }
 }
