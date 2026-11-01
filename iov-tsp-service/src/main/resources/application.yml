@@ -1,10 +1,4 @@
 spring:
-  # TSP-DSN-CR-014：Druid 会话 UTC 初始化（RD-TIME-003 等价 initSql）。
-  # 与 Nacos mysql.yaml 的 spring.datasource.* 键级合并；若生产已含同名配置，以生产为准并保持一致。
-  datasource:
-    druid:
-      connection-init-sqls:
-        - SET time_zone='+00:00'
   kafka:
     topics:
       ccs.sim-status.changed: ccs.sim-status.changed
