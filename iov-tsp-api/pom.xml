@@ -24,6 +24,13 @@
             <artifactId>jakarta.servlet-api</artifactId>
             <scope>provided</scope>
         </dependency>
+
+        <!-- VIAM 官方事件/快照契约（IOV-TSP-DSN-CR-016：消费官方 VO，不复制第二套契约） -->
+        <dependency>
+            <groupId>net.hwyz.iov.cloud.sec</groupId>
+            <artifactId>sec-viam-api</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
     </dependencies>
 
 </project>

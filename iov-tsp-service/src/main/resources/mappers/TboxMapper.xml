@@ -37,27 +37,29 @@
     </sql>
 
     <!-- 插入（TSP-DSN-CR-014：审计单属主，create_time/modify_time 由 DB DEFAULT/ON UPDATE 唯一生成） -->
+    <!-- IOV-TSP-DSN-CR-016：安全列（device_status/activate_time/first_login_time/last_login_time）不入插入列，
+         唯一业务写入者=VIAM 安全投影处理链；资产导入不得覆盖/预置安全状态 -->
     <insert id="insertPo" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO tb_tbox (
-            id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, device_status, iccid1, iccid2, imei, 
+            id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, iccid1, iccid2, imei, 
             description, create_by, modify_by, row_version, row_valid
         )
         VALUES (
-            #{id}, #{sn}, #{no}, #{configWord}, #{supplierCode}, #{hardwareVer}, #{softwareVer}, #{hardwareNo}, #{softwareNo}, #{hsm}, COALESCE(#{deviceStatus}, 1), #{iccid1}, #{iccid2}, #{imei}, 
+            #{id}, #{sn}, #{no}, #{configWord}, #{supplierCode}, #{hardwareVer}, #{softwareVer}, #{hardwareNo}, #{softwareNo}, #{hsm}, #{iccid1}, #{iccid2}, #{imei}, 
             #{description}, #{createBy}, #{modifyBy}, 1, 1
         )
     </insert>
 
-    <!-- 批量插入 -->
+    <!-- 批量插入（安全列不入插入列，同 insertPo 边界） -->
     <insert id="batchInsertPo" useGeneratedKeys="true" keyProperty="id" parameterType="java.util.List">
         INSERT INTO tb_tbox (
-            id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, device_status, iccid1, iccid2, imei, 
+            id, sn, no, config_word, supplier_code, hardware_ver, software_ver, hardware_no, software_no, hsm, iccid1, iccid2, imei, 
             description, create_by, modify_by, row_version, row_valid
         )
         VALUES
         <foreach collection="list" item="item" index="index" separator=",">
         (
-            #{item.id}, #{item.sn}, #{item.no}, #{item.configWord}, #{item.supplierCode}, #{item.hardwareVer}, #{item.softwareVer}, #{item.hardwareNo}, #{item.softwareNo}, #{item.hsm}, COALESCE(#{item.deviceStatus}, 1), #{item.iccid1}, #{item.iccid2}, #{item.imei}, 
+            #{item.id}, #{item.sn}, #{item.no}, #{item.configWord}, #{item.supplierCode}, #{item.hardwareVer}, #{item.softwareVer}, #{item.hardwareNo}, #{item.softwareNo}, #{item.hsm}, #{item.iccid1}, #{item.iccid2}, #{item.imei}, 
             #{item.description}, #{item.createBy}, #{item.modifyBy}, 1, 1
         )
         </foreach>
@@ -92,9 +94,6 @@
         </if>
         <if test="hsm != null and hsm != ''">
             t.hsm = #{hsm},
-        </if>
-        <if test="deviceStatus != null">
-            t.device_status = #{deviceStatus},
         </if>
         <if test="iccid1 != null and iccid1 != ''">
             t.iccid1 = #{iccid1},
@@ -246,29 +245,38 @@
         <!-- 添加自定义条件 -->
     </select>
 
-    <!-- 记录成功登录（幂等，按已解析主键更新） -->
-    <!-- first_login_time set-once；last_login_time = max(existing, ts)；PRE_ACTIVE -> ACTIVATING；ACTIVE 仅刷新 last；BLOCKED/RETIRED 不更新 -->
-    <update id="recordLoginById">
+    <!-- VIAM 投影：最近登录事实单调更新（IOV-TSP-DSN-CR-016） -->
+    <!-- 唯一业务写入者=VIAM 安全投影处理链；last_login_time 取 max(existing, ts)；不写 first/device_status/activate_time -->
+    <update id="applyViamLoginFact">
         UPDATE tb_tbox t SET
-        t.first_login_time = COALESCE(t.first_login_time, #{ts}),
-        t.last_login_time = GREATEST(COALESCE(t.last_login_time, #{ts}), #{ts}),
-        t.device_status = CASE WHEN t.device_status = #{preActiveStatus} THEN #{activatingStatus} ELSE t.device_status END,
+        t.last_login_time = CASE
+            WHEN t.last_login_time IS NULL OR t.last_login_time &lt; #{ts} THEN #{ts}
+            ELSE t.last_login_time END,
+        t.viam_sync_status = #{syncStatus},
+        t.viam_last_reconciled_at = #{projectedAt},
         t.row_version = t.row_version + 1
         WHERE t.id = #{id}
         AND t.row_valid = 1
-        AND t.device_status IN (#{preActiveStatus}, #{activatingStatus}, #{activeStatus})
     </update>
 
-    <!-- 完成业务激活（幂等，TSP-DSN-CR-012 §6） -->
-    <!-- 按已解析主键条件更新；仅当 device_status = ACTIVATING AND activate_time IS NULL 时更新为 ACTIVE + activate_time -->
-    <update id="completeActivationById">
+    <!-- VIAM 投影：应用安全开通快照（IOV-TSP-DSN-CR-016） -->
+    <!-- 以 VIAM 权威快照为准写 device_status/first_login_time（不锁死本地旧值）；last_login_time 单调 max（防乱序）；
+         不写 activate_time（V-GAP-3：语义未明确，保持未知） -->
+    <update id="applyViamSnapshot">
         UPDATE tb_tbox t SET
-        t.device_status = #{activeStatus},
-        t.activate_time = #{activateTime},
+        t.device_status = #{deviceStatus},
+        t.first_login_time = CASE
+            WHEN #{firstLoginTime} IS NOT NULL THEN #{firstLoginTime}
+            ELSE t.first_login_time END,
+        t.last_login_time = CASE
+            WHEN #{lastLoginTime} IS NOT NULL
+                 AND (t.last_login_time IS NULL OR t.last_login_time &lt; #{lastLoginTime})
+            THEN #{lastLoginTime} ELSE t.last_login_time END,
+        t.viam_security_version = #{securityVersion},
+        t.viam_sync_status = #{syncStatus},
+        t.viam_last_reconciled_at = #{projectedAt},
         t.row_version = t.row_version + 1
         WHERE t.id = #{id}
-        AND t.device_status = #{activatingStatus}
-        AND t.activate_time IS NULL
         AND t.row_valid = 1
     </update>
 </mapper>

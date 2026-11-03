@@ -8,6 +8,8 @@ import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.Tbox
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.TboxPo;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+
 @Repository
 @RequiredArgsConstructor
 public class TboxRepositoryImpl implements TboxRepository {
@@ -27,4 +29,22 @@ public class TboxRepositoryImpl implements TboxRepository {
         return tboxMapper.insertPo(po);
     }
 
+    @Override
+    public Tbox getByHsm(String hsm) {
+        TboxPo po = tboxMapper.selectByHsm(hsm);
+        return tboxConverter.toEntity(po);
+    }
+
+    @Override
+    public void applyViamLoginFact(Long id, LocalDateTime ts, LocalDateTime projectedAt, String syncStatus) {
+        tboxMapper.applyViamLoginFact(id, ts, projectedAt, syncStatus);
+    }
+
+    @Override
+    public void applyViamSnapshot(Long id, Integer deviceStatus, LocalDateTime firstLoginTime,
+                                  LocalDateTime lastLoginTime, Long securityVersion,
+                                  LocalDateTime projectedAt, String syncStatus) {
+        tboxMapper.applyViamSnapshot(id, deviceStatus, firstLoginTime, lastLoginTime,
+                securityVersion, projectedAt, syncStatus);
+    }
 }

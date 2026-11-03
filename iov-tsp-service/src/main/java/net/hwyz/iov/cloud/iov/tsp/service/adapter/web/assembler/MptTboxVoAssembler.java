@@ -48,6 +48,7 @@ public interface MptTboxVoAssembler {
                 .firstLoginTime(toDisplay(result.getFirstLoginTime(), zone))
                 .lastLoginTime(toDisplay(result.getLastLoginTime(), zone))
                 .activateTime(toDisplay(result.getActivateTime(), zone))
+                .projectionStatus(result.getProjectionStatus())
                 .bindingStatus(result.getBindingStatus())
                 .bindingVersion(result.getBindingVersion())
                 .anomalyTags(toAnomalyTagVos(result.getAnomalyTags(), zone))

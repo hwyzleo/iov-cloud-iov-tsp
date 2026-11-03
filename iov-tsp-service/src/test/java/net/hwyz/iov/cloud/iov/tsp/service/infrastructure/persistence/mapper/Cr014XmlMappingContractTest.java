@@ -20,10 +20,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 覆盖：
  * <ul>
  *   <li>VehicleTboxMapper.xml / VehicleCcpMapper.xml：last_event_time（Instant）读结果映射 typeHandler 与写参数 typeHandler；</li>
- *   <li>DeviceAdmissionLogMapper.xml：checked_at（Instant）读结果映射与写参数 typeHandler；</li>
  *   <li>全部审计写入口（insert/update/logicalDelete/业务 SQL）不再显式 now() 写入 create/modify_time，
  *       改由 DB DEFAULT/ON UPDATE 唯一生成（审计单属主，RD-TIME-005）。</li>
  * </ul>
+ * IOV-TSP-DSN-CR-016：DeviceAdmissionLogMapper（旧准入审计写入端）已迁出删除，其 UTC 映射断言移除。
  *
  * @author hwyz_leo
  * @since 2026-10-31
@@ -34,8 +34,6 @@ class Cr014XmlMappingContractTest {
     private static final String VEHICLE_TBOX_NS = "net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.VehicleTboxMapper";
     private static final String VEHICLE_CCP_XML = "/mappers/VehicleCcpMapper.xml";
     private static final String VEHICLE_CCP_NS = "net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.VehicleCcpMapper";
-    private static final String ADMISSION_LOG_XML = "/mappers/DeviceAdmissionLogMapper.xml";
-    private static final String ADMISSION_LOG_NS = "net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.DeviceAdmissionLogMapper";
 
     // ---------- 读结果映射（resultMap typeHandler） ----------
 
@@ -51,13 +49,6 @@ class Cr014XmlMappingContractTest {
         Configuration configuration = new Configuration();
         parse(configuration, VEHICLE_CCP_XML);
         assertResultMapTypeHandler(configuration, VEHICLE_CCP_NS + ".baseResultMap", "lastEventTime");
-    }
-
-    @Test
-    void admissionLogResultMap_CheckedAt_ShouldUseUtcInstantTypeHandler() throws Exception {
-        Configuration configuration = new Configuration();
-        parse(configuration, ADMISSION_LOG_XML);
-        assertResultMapTypeHandler(configuration, ADMISSION_LOG_NS + ".baseResultMap", "checkedAt");
     }
 
     private void assertResultMapTypeHandler(Configuration configuration, String resultMapId, String property) {
@@ -84,11 +75,6 @@ class Cr014XmlMappingContractTest {
         assertParameterTypeHandler(VEHICLE_CCP_XML, "upsertByBindingId", "lastEventTime");
     }
 
-    @Test
-    void admissionLogInsert_CheckedAt_ShouldUseUtcTypeHandlerOnParameter() throws Exception {
-        assertParameterTypeHandler(ADMISSION_LOG_XML, "insertPo", "checkedAt");
-    }
-
     // ---------- 审计单属主：写入口不再显式 now() ----------
 
     @Test
@@ -105,8 +91,7 @@ class Cr014XmlMappingContractTest {
                 "/mappers/CcpLogMapper.xml",
                 "/mappers/VehicleTboxLogMapper.xml",
                 "/mappers/VehicleCcpLogMapper.xml",
-                "/mappers/VehicleSimLogMapper.xml",
-                "/mappers/DeviceAdmissionLogMapper.xml"
+                "/mappers/VehicleSimLogMapper.xml"
         };
         for (String mapperXml : mappers) {
             String content = readResource(mapperXml);
@@ -118,7 +103,7 @@ class Cr014XmlMappingContractTest {
     @Test
     void auditWriteStatements_ShouldDeclareDefaultAuditColumnsOnly() throws Exception {
         // insert 列清单应省略 create_time/modify_time（由 DB DEFAULT 生成）
-        for (String mapperXml : new String[]{VEHICLE_TBOX_XML, VEHICLE_CCP_XML, ADMISSION_LOG_XML}) {
+        for (String mapperXml : new String[]{VEHICLE_TBOX_XML, VEHICLE_CCP_XML}) {
             String insertSql = getMapperSql(mapperXml, "insertPo");
             assertFalse(insertSql.contains("create_time"), mapperXml + " insertPo 仍显式写 create_time");
             assertFalse(insertSql.contains("modify_time"), mapperXml + " insertPo 仍显式写 modify_time");

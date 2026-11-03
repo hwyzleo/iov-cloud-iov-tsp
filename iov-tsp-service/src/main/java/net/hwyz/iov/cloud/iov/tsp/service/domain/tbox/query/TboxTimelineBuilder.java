@@ -4,7 +4,6 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.TboxTimelineMilestone;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxManagementView;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxRegistrationEventRecord;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.query.model.TimelineMilestone;
-import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.service.DeviceRegistrationDomainService;
 import net.hwyz.iov.cloud.iov.tsp.service.common.util.UtcTime;
 import org.springframework.stereotype.Service;
 
@@ -26,6 +25,13 @@ import java.util.List;
 public class TboxTimelineBuilder {
 
     /**
+     * IOV-TSP-DSN-CR-016：旧注册激活事件类型（历史 tb_tbox_registration_event 数据；
+     * 原常量宿主 DeviceRegistrationDomainService 已迁出删除，值保持不变供历史只读时间线匹配）。
+     */
+    private static final String EVENT_TYPE_DEVICE_ONLINE = "DEVICE_ONLINE";
+    private static final String EVENT_TYPE_V2C_KEY_PROVISIONED = "TBOX_V2C_KEY_PROVISIONED";
+
+    /**
      * 构建设备可证实时间线（按时间升序）
      *
      * @param view   设备聚合视图
@@ -39,12 +45,12 @@ public class TboxTimelineBuilder {
         }
         List<TboxRegistrationEventRecord> safeEvents = events == null ? List.of() : events;
         List<TboxRegistrationEventRecord> onlineEvents = safeEvents.stream()
-                .filter(event -> DeviceRegistrationDomainService.EVENT_TYPE_DEVICE_ONLINE.equals(event.eventType()))
+                .filter(event -> EVENT_TYPE_DEVICE_ONLINE.equals(event.eventType()))
                 .filter(event -> event.occurredAt() != null)
                 .sorted(Comparator.comparing(TboxRegistrationEventRecord::occurredAt))
                 .toList();
         List<TboxRegistrationEventRecord> v2cEvents = safeEvents.stream()
-                .filter(event -> DeviceRegistrationDomainService.EVENT_TYPE_V2C_KEY_PROVISIONED.equals(event.eventType()))
+                .filter(event -> EVENT_TYPE_V2C_KEY_PROVISIONED.equals(event.eventType()))
                 .filter(event -> event.occurredAt() != null)
                 .sorted(Comparator.comparing(TboxRegistrationEventRecord::occurredAt))
                 .toList();

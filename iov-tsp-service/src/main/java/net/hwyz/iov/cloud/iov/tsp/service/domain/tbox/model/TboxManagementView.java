@@ -49,6 +49,26 @@ public class TboxManagementView {
 
     private LocalDateTime activateTime;
 
+    /**
+     * VIAM 投影同步状态: SYNCED/PARTIAL/STALE/UNKNOWN；NULL=从未同步（投影缺失）
+     */
+    private String viamSyncStatus;
+
+    /**
+     * VIAM 投影最后成功对账/快照应用时间（≠事实时间）
+     */
+    private LocalDateTime viamLastReconciledAt;
+
+    /**
+     * VIAM 安全状态版本（预留；当前 VIAM 快照 API 未提供，NULL=未知）
+     */
+    private Long viamSecurityVersion;
+
+    /**
+     * TSP 运营退役时间（独立表达，与安全 BLOCKED/RETIRED 分离；NULL=未运营退役）
+     */
+    private LocalDateTime operationalRetiredAt;
+
     private String iccid1;
 
     private String iccid2;

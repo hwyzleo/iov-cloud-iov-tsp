@@ -11,10 +11,7 @@ import net.hwyz.iov.cloud.framework.web.timezone.DisplayTimeFacade;
 import net.hwyz.iov.cloud.framework.web.timezone.RequestTimeZoneFallbackResolver;
 import net.hwyz.iov.cloud.framework.web.timezone.RequestTimeZoneInterceptor;
 import net.hwyz.iov.cloud.framework.web.timezone.RequestTimeZoneSnapshotResolver;
-import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionCheckVo;
-import net.hwyz.iov.cloud.iov.tsp.api.vo.DeviceAdmissionResultVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.TboxVo;
-import net.hwyz.iov.cloud.iov.tsp.api.vo.VehicleAccessIdentityResultVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.mpt.MptTboxSummaryVo;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.controller.mpt.MptTboxController;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.MptTboxSummaryResult;
@@ -314,37 +311,8 @@ class TspJacksonTimeContractTest {
         assertEpochMillis(node.get("activateTime"), SAMPLE_LOCAL.plusDays(30));
     }
 
-    @Test
-    void deviceAdmissionVo_Instant时间字段epoch毫秒数字与双读输入() {
-        ObjectMapper mapper = epochMapper();
-        // 输出：Instant → epoch 毫秒
-        DeviceAdmissionResultVo result = new DeviceAdmissionResultVo();
-        result.setUpdatedAt(SAMPLE_INSTANT);
-        JsonNode node = mapper.valueToTree(result);
-        assertTrue(node.get("updatedAt").isIntegralNumber());
-        assertEquals(SAMPLE_INSTANT.toEpochMilli(), node.get("updatedAt").longValue());
-
-        // 输入：Instant ts 双读（ISO / 13 位毫秒 / 10 位秒）
-        DeviceAdmissionCheckVo fromIso = mapper.convertValue(
-                java.util.Map.of("ts", SAMPLE_INSTANT.toString()), DeviceAdmissionCheckVo.class);
-        DeviceAdmissionCheckVo fromMillis = mapper.convertValue(
-                java.util.Map.of("ts", SAMPLE_INSTANT.toEpochMilli()), DeviceAdmissionCheckVo.class);
-        DeviceAdmissionCheckVo fromSeconds = mapper.convertValue(
-                java.util.Map.of("ts", SAMPLE_INSTANT.getEpochSecond()), DeviceAdmissionCheckVo.class);
-        assertEquals(SAMPLE_INSTANT, fromIso.getTs());
-        assertEquals(SAMPLE_INSTANT, fromMillis.getTs());
-        assertEquals(SAMPLE_INSTANT, fromSeconds.getTs());
-    }
-
-    @Test
-    void vehicleAccessIdentityVo_bindingUpdatedAt_epoch毫秒数字() {
-        ObjectMapper mapper = epochMapper();
-        VehicleAccessIdentityResultVo vo = new VehicleAccessIdentityResultVo();
-        vo.setBindingUpdatedAt(SAMPLE_INSTANT);
-        JsonNode node = mapper.valueToTree(vo);
-        assertTrue(node.get("bindingUpdatedAt").isIntegralNumber());
-        assertEquals(SAMPLE_INSTANT.toEpochMilli(), node.get("bindingUpdatedAt").longValue());
-    }
+    // IOV-TSP-DSN-CR-016：旧安全 DTO（DeviceAdmission*/VehicleAccessIdentity*）已迁出删除，
+    // 其 JSON 时间契约不再属于 TSP 对外契约；保留 TboxVo/MptTboxSummaryVo 时间契约。
 
     // ---------- 辅助 ----------
 

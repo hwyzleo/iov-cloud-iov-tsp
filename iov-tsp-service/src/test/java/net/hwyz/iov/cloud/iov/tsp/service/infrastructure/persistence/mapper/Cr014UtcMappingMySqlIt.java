@@ -1,7 +1,6 @@
 package net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper;
 
-import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceStatus;
-import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.DeviceAdmissionLogPo;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.enums.DeviceStatus;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.TboxPo;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.VehicleTboxPo;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -29,6 +28,7 @@ import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -83,8 +83,7 @@ class Cr014UtcMappingMySqlIt {
             for (String xml : new String[]{
                     "/mappers/VehicleTboxMapper.xml",
                     "/mappers/VehicleCcpMapper.xml",
-                    "/mappers/TboxMapper.xml",
-                    "/mappers/DeviceAdmissionLogMapper.xml"}) {
+                    "/mappers/TboxMapper.xml"}) {
                 try (InputStream in = Cr014UtcMappingMySqlIt.class.getResourceAsStream(xml)) {
                     if (in == null) {
                         throw new IllegalStateException("未找到 " + xml);
@@ -165,29 +164,6 @@ class Cr014UtcMappingMySqlIt {
     }
 
     @Test
-    void checkedAt_RoundTrip_ShouldPreserveInstant() {
-        requireDb();
-        // 注：checked_at 现有列精度为秒级 DATETIME(0)，写入亚秒会被截断；此处用整秒验证双向映射一致
-        Instant checked = Instant.parse("2026-10-10T09:30:00Z");
-        try (SqlSession session = sqlSessionFactory.openSession()) {
-            DeviceAdmissionLogMapper mapper = session.getMapper(DeviceAdmissionLogMapper.class);
-            DeviceAdmissionLogPo po = DeviceAdmissionLogPo.builder()
-                    .vin("ITVIN0003").admissionResult("ALLOW").reason("NONE")
-                    .uidDigest("u").certSerialDigest("c").sourceIpDigest("s")
-                    .checkedAt(checked).revocationSource("OCSP").dependencyOutcome("OK")
-                    .caller("it").build();
-            mapper.insertPo(po);
-            session.commit();
-            assertNotNull(po.getId());
-            DeviceAdmissionLogPo read = mapper.selectPoById(po.getId());
-            assertEquals(checked, read.getCheckedAt(),
-                    "checked_at 双向映射必须保持同一绝对时刻");
-        }
-    }
-
-    // ---------- 2. 审计单属主（DB DEFAULT/ON UPDATE 唯一生成） ----------
-
-    @Test
     void auditTimes_ShouldBeGeneratedByDbOnInsert() {
         requireDb();
         try (SqlSession session = sqlSessionFactory.openSession()) {
@@ -240,16 +216,16 @@ class Cr014UtcMappingMySqlIt {
         }
     }
 
-    // ---------- 3. recordLoginById set-once / max 语义保持 ----------
+    // ---------- 3. VIAM 投影写语义保持（IOV-TSP-DSN-CR-016 替代 recordLoginById） ----------
 
     @Test
-    void recordLoginById_FirstSetOnce_LastMax() {
+    void applyViamLoginFact_LastMax_FirstAndStatusNotWritten() {
         requireDb();
         try (SqlSession session = sqlSessionFactory.openSession()) {
             TboxMapper mapper = session.getMapper(TboxMapper.class);
             TboxPo po = TboxPo.builder().sn("ITSN-LOGIN-" + System.nanoTime() % 100_000)
                     .hsm("HSM-IT-3-" + System.nanoTime() % 100_000).iccid1("46000000000000000002")
-                    .deviceStatus(DeviceStatus.PRE_ACTIVE.getCode()).build();
+                    .build();
             mapper.insertPo(po);
             session.commit();
 
@@ -257,29 +233,54 @@ class Cr014UtcMappingMySqlIt {
             LocalDateTime later = LocalDateTime.of(2026, 10, 11, 8, 0, 0);
             LocalDateTime earliest = LocalDateTime.of(2026, 10, 9, 8, 0, 0);
 
-            // 第一次登录：set-once first + max last
-            assertEquals(1, mapper.recordLoginById(po.getId(), first,
-                    DeviceStatus.PRE_ACTIVE.getCode(), DeviceStatus.ACTIVATING.getCode(), DeviceStatus.ACTIVE.getCode()));
+            // 第一次登录事实：last = first；first_login_time 不写（由快照承载）；device_status 不推进（投影链唯一写者）
+            assertEquals(1, mapper.applyViamLoginFact(po.getId(), first,
+                    LocalDateTime.of(2026, 10, 10, 9, 0, 0), "PARTIAL"));
             session.commit();
             TboxPo read1 = mapper.selectPoById(po.getId());
-            assertEquals(first, read1.getFirstLoginTime(), "first_login_time set-once（首次）");
-            assertEquals(first, read1.getLastLoginTime());
+            assertNull(read1.getFirstLoginTime(), "first_login_time 不由登录事实写入（快照承载）");
+            assertEquals(first, read1.getLastLoginTime(), "last_login_time 首次写入");
+            assertNull(read1.getDeviceStatus(), "device_status 不由登录事实写入（投影链唯一写者）");
+            assertEquals("PARTIAL", read1.getViamSyncStatus());
 
-            // 第二次：较晚时间，last 取 max、first 不变
-            mapper.recordLoginById(po.getId(), later,
-                    DeviceStatus.PRE_ACTIVE.getCode(), DeviceStatus.ACTIVATING.getCode(), DeviceStatus.ACTIVE.getCode());
+            // 第二次：较晚时间，last 取 max
+            mapper.applyViamLoginFact(po.getId(), later,
+                    LocalDateTime.of(2026, 10, 11, 9, 0, 0), "PARTIAL");
             session.commit();
             TboxPo read2 = mapper.selectPoById(po.getId());
-            assertEquals(first, read2.getFirstLoginTime(), "first_login_time 不得被覆盖（set-once）");
+            assertNull(read2.getFirstLoginTime());
             assertEquals(later, read2.getLastLoginTime(), "last_login_time 取 max");
 
             // 第三次：更早时间，last 保持 max、不倒退
-            mapper.recordLoginById(po.getId(), earliest,
-                    DeviceStatus.PRE_ACTIVE.getCode(), DeviceStatus.ACTIVATING.getCode(), DeviceStatus.ACTIVE.getCode());
+            mapper.applyViamLoginFact(po.getId(), earliest,
+                    LocalDateTime.of(2026, 10, 11, 10, 0, 0), "PARTIAL");
             session.commit();
             TboxPo read3 = mapper.selectPoById(po.getId());
             assertEquals(later, read3.getLastLoginTime(), "last_login_time 不得倒退（max）");
-            assertEquals(DeviceStatus.ACTIVATING.getCode(), read3.getDeviceStatus(), "PRE_ACTIVE→ACTIVATING 推进");
+        }
+    }
+
+    @Test
+    void applyViamSnapshot_FirstFromSnapshot_LastMax() {
+        requireDb();
+        try (SqlSession session = sqlSessionFactory.openSession()) {
+            TboxMapper mapper = session.getMapper(TboxMapper.class);
+            TboxPo po = TboxPo.builder().sn("ITSN-SNAP-" + System.nanoTime() % 100_000)
+                    .hsm("HSM-IT-4-" + System.nanoTime() % 100_000).iccid1("46000000000000000002")
+                    .build();
+            mapper.insertPo(po);
+            session.commit();
+
+            LocalDateTime first = LocalDateTime.of(2026, 10, 10, 8, 0, 0);
+            LocalDateTime last = LocalDateTime.of(2026, 10, 12, 8, 0, 0);
+            mapper.applyViamSnapshot(po.getId(), DeviceStatus.ACTIVE.getCode(), first, last,
+                    null, LocalDateTime.of(2026, 10, 12, 9, 0, 0), "SYNCED");
+            session.commit();
+            TboxPo read = mapper.selectPoById(po.getId());
+            assertEquals(DeviceStatus.ACTIVE.getCode(), read.getDeviceStatus(), "快照 state 映射写 device_status");
+            assertEquals(first, read.getFirstLoginTime(), "first_login_time 以 VIAM 快照为准");
+            assertEquals(last, read.getLastLoginTime());
+            assertEquals("SYNCED", read.getViamSyncStatus());
         }
     }
 

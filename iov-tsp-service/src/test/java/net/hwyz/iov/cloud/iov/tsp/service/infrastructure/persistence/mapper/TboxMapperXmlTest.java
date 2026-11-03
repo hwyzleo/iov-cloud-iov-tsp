@@ -33,10 +33,11 @@ class TboxMapperXmlTest {
         Configuration configuration = new Configuration();
         parse(configuration, TBOX_MAPPER_XML);
 
-        assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".recordLoginById"),
-                "缺少 recordLoginById 语句");
-        assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".completeActivationById"),
-                "缺少 completeActivationById 语句");
+        // IOV-TSP-DSN-CR-016：旧 recordLoginById/completeActivationById 已删除，由 VIAM 投影语句取代
+        assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".applyViamLoginFact"),
+                "缺少 applyViamLoginFact 语句");
+        assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".applyViamSnapshot"),
+                "缺少 applyViamSnapshot 语句");
         assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".selectByHsm"),
                 "缺少 selectByHsm 语句");
         assertTrue(configuration.hasStatement(TBOX_NAMESPACE + ".selectAllByHsm"),

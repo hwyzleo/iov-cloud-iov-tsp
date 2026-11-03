@@ -35,6 +35,11 @@ public class MptTboxSummaryResult {
 
     private LocalDateTime activateTime;
 
+    /**
+     * VIAM 投影同步状态: SYNCED/PARTIAL/STALE/UNKNOWN（UNKNOWN=投影缺失，安全字段不可信）
+     */
+    private String projectionStatus;
+
     private TboxBindingStatus bindingStatus;
 
     private Long bindingVersion;

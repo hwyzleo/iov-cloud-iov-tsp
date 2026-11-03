@@ -3,8 +3,6 @@ package net.hwyz.iov.cloud.iov.tsp.service.domain.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.hwyz.iov.cloud.framework.common.util.StrUtil;
-import net.hwyz.iov.cloud.iov.tsp.service.common.exception.TboxBaseException;
-import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceStatus;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.Tbox;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.entity.TboxLog;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.TboxLogRepository;
@@ -34,17 +32,8 @@ public class TboxInfoDomainService {
             Tbox existingTbox = getBySn(tbox.getSn());
             if (existingTbox == null) {
                 tbox.setSupplierCode(supplierCode);
-                if (tbox.getDeviceStatus() == null) {
-                    // 导入的新车联终端默认待激活状态
-                    tbox.setDeviceStatus(DeviceStatus.PRE_ACTIVE.getCode());
-                } else {
-                    // 校验传入的设备状态是否合法
-                    try {
-                        DeviceStatus.fromCode(tbox.getDeviceStatus());
-                    } catch (IllegalArgumentException e) {
-                        throw new TboxBaseException("车联终端[" + tbox.getSn() + "]设备状态[" + tbox.getDeviceStatus() + "]非法");
-                    }
-                }
+                // IOV-TSP-DSN-CR-016：安全状态（device_status 等）不再由资产导入预置/校验，
+                // 唯一业务写入者=VIAM 安全投影处理链；插入 SQL 已移除安全列（投影缺失=NULL）
                 tboxRepository.save(tbox);
                 recordLog(tbox, "数据批次[" + batchNum + "]数据导入");
                 count++;

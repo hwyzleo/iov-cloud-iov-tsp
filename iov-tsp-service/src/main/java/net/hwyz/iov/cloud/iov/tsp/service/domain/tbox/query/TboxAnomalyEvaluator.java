@@ -1,7 +1,7 @@
 package net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.query;
 
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.TboxAnomalyType;
-import net.hwyz.iov.cloud.iov.tsp.service.domain.deviceAdmission.model.DeviceStatus;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.enums.DeviceStatus;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.model.TboxManagementView;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.tbox.query.model.AnomalyTag;
 import org.springframework.stereotype.Service;
@@ -40,26 +40,29 @@ public class TboxAnomalyEvaluator {
             return tags;
         }
         int bindCount = view.getBindCount() == null ? 0 : view.getBindCount();
-        DeviceStatus status = resolveStatus(view.getDeviceStatus());
+        // IOV-TSP-DSN-CR-016：VIAM 投影缺失（从未同步）时安全字段不可信，
+        // 不派生任何基于安全状态的异常标签（不误判 NEVER_ONLINE / ACTIVATION_TIMEOUT / FROZEN_OR_RETIRED）
+        boolean projectionMissing = view.getViamSyncStatus() == null;
+        DeviceStatus status = projectionMissing ? null : resolveStatus(view.getDeviceStatus());
 
         if (bindCount > 1) {
             tags.add(new AnomalyTag(TboxAnomalyType.BINDING_CONFLICT, now, null, null));
         }
-        if (status == DeviceStatus.BLOCKED || status == DeviceStatus.RETIRED) {
+        if (!projectionMissing && (status == DeviceStatus.BLOCKED || status == DeviceStatus.RETIRED)) {
             tags.add(new AnomalyTag(TboxAnomalyType.FROZEN_OR_RETIRED, now, null, null));
         }
-        if (status == DeviceStatus.ACTIVATING
+        if (!projectionMissing && status == DeviceStatus.ACTIVATING
                 && view.getFirstLoginTime() != null
                 && activationTimeout != null
                 && view.getFirstLoginTime().isBefore(now.minus(activationTimeout))) {
             tags.add(new AnomalyTag(TboxAnomalyType.ACTIVATION_TIMEOUT, now,
                     view.getFirstLoginTime(), secondsBetween(view.getFirstLoginTime(), now)));
         }
-        if (view.getFirstLoginTime() == null) {
+        if (!projectionMissing && view.getFirstLoginTime() == null) {
             tags.add(new AnomalyTag(TboxAnomalyType.NEVER_ONLINE, now, view.getCreateTime(),
                     view.getCreateTime() != null ? secondsBetween(view.getCreateTime(), now) : null));
         }
-        if (view.getLastLoginTime() != null
+        if (!projectionMissing && view.getLastLoginTime() != null
                 && longOfflineThreshold != null
                 && view.getLastLoginTime().isBefore(now.minus(longOfflineThreshold))) {
             tags.add(new AnomalyTag(TboxAnomalyType.LONG_OFFLINE, now,

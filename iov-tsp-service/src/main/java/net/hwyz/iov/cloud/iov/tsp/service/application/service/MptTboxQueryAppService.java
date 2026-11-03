@@ -298,6 +298,7 @@ public class MptTboxQueryAppService {
                 .firstLoginTime(view.getFirstLoginTime())
                 .lastLoginTime(view.getLastLoginTime())
                 .activateTime(view.getActivateTime())
+                .projectionStatus(projectionStatus(view))
                 .bindingStatus(resolveBindingStatus(view))
                 .bindingVersion(view.getBindingVersion())
                 .anomalyTags(tagResults)
@@ -319,6 +320,13 @@ public class MptTboxQueryAppService {
         return tboxAnomalyEvaluator.evaluate(view, now,
                 tboxManagementProperties.getActivationTimeout(),
                 tboxManagementProperties.getLongOfflineThreshold());
+    }
+
+    /**
+     * IOV-TSP-DSN-CR-016：VIAM 投影同步状态（NULL=从未同步，安全字段不可信，展示为 UNKNOWN）
+     */
+    private String projectionStatus(TboxManagementView view) {
+        return view.getViamSyncStatus() == null ? "UNKNOWN" : view.getViamSyncStatus();
     }
 
     private List<TboxRegistrationEventRecord> loadInboxQuietly(String sn) {

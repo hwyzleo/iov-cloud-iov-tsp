@@ -3,59 +3,37 @@ spring:
     topics:
       ccs.sim-status.changed: ccs.sim-status.changed
       vmd.vehicle-part-binding.changed: vmd.vehicle-part-binding.changed
-      vmd.tbox-v2c-key-provisioned: vmd.tbox-v2c-key-provisioned
     consumer:
       group-id: tsp-vehicle-sim-status
       reactive-concurrency: 3
 
 tsp:
-  kafka:
-    # DEVICE_ONLINE 消费者（TSP-DSN-CR-010）：独立 Consumer Group，手动 ack + Retry/DLT
-    device-online:
-      enabled: true
-      topic: vagw.device.online
-      group-id: iov-tsp-device-online
+  # VIAM 安全投影消费（IOV-TSP-DSN-CR-016）：默认关闭，旧 TSP 安全写链停用（联合切换）后启用。
+  # 事件仅作触发/事实更新，安全状态以 VIAM 官方快照为准；Inbox 仅存契约摘要，不存敏感 payload。
+  viam-projection:
+    enabled: ${TSP_VIAM_PROJECTION_ENABLED:false}
+    consumer:
+      group-id: iov-tsp-viam-projection
+      topics:
+        login-succeeded: ${VIAM_KAFKA_TOPIC_DEVICE_LOGIN_SUCCEEDED:viam.device.login-succeeded}
+        onboarding-changed: ${VIAM_KAFKA_TOPIC_DEVICE_ONBOARDING_CHANGED:viam.device.onboarding.changed}
+        access-invalidated: ${VIAM_KAFKA_TOPIC_ACCESS_INVALIDATED:viam.access-invalidated}
+        v2c-key-provisioned: ${VIAM_KAFKA_TOPIC_TBOX_V2C_KEY_PROVISIONED:viam.tbox-v2c-key-provisioned}
       retry:
         max-attempts: 5
         initial-backoff: 1s
         max-backoff: 30s
-      dlt:
-        enabled: true
-        topic: ${TSP_DEVICE_ONLINE_DLT_TOPIC:tsp.device-online.dlt}
-        partitions: ${TSP_DEVICE_ONLINE_DLT_PARTITIONS:6}
-        replication-factor: ${TSP_DEVICE_ONLINE_DLT_REPLICATION_FACTOR:1}
+    snapshot:
+      # VIAM 官方 onboarding 快照刷新（fail-closed：失败标记 STALE，不伪装状态）
+      enabled: true
+      max-attempts: 3
+      initial-backoff: 1s
+      max-backoff: 10s
+  kafka:
     # 旧 vagw-tbox-event 链路默认关闭；CMD_ACK/FIND_VEHICLE 待 TSP-CR-011 恢复
     legacy-tbox-event:
       enabled: false
       topic: vagw-tbox-event
-    # V2C 聚合成功事件消费者（TSP-DSN-CR-012）：独立 Consumer Group，手动 ack + Retry/DLT
-    # 发布门禁默认关闭，仅在 VMD CR-062 生产者升级、Topic/ACL 与 E2E 就绪后开启
-    tbox-v2c-key-provisioned:
-      enabled: ${TSP_TBOX_V2C_ACTIVATION_ENABLED:true}
-      topic: vmd.tbox-v2c-key-provisioned
-      group-id: iov-tsp-tbox-v2c-key-provisioned
-      concurrency: 1
-      max-payload-bytes: 16384
-      max-device-sn-bytes: 128
-      max-future-skew: PT5M
-      # 切换门禁（CR-012 §11）：v1 契约不能证明生产者已升级，
-      # 启用前必须显式声明 active-producer-release，且旧语义事件已暂停/排空、旧新生产者不得混跑
-      required-producer-release: VMD-CR-062
-      active-producer-release: ${TSP_TBOX_V2C_ACTIVE_PRODUCER_RELEASE:VMD-CR-062}
-      # 未知非空版本 fail-closed；wire/成功语义变化必须发布 v2
-      supported-contract-versions:
-        - '1'
-        - v1
-      retry:
-        max-attempts: 5
-        initial-backoff: 1s
-        max-backoff: 30s
-      dlt:
-        enabled: true
-        topic: ${TSP_TBOX_V2C_KEY_PROVISIONED_DLT_TOPIC:tsp.tbox-v2c-key-provisioned.dlt}
-        partitions: ${TSP_TBOX_V2C_KEY_PROVISIONED_DLT_PARTITIONS:6}
-        replication-factor: ${TSP_TBOX_V2C_KEY_PROVISIONED_DLT_REPLICATION_FACTOR:1}
-        retention-days: ${TSP_TBOX_V2C_KEY_PROVISIONED_DLT_RETENTION_DAYS:7}
   tbox-management:
     # TBOX 后台运营查询（MPT，TSP-DSN-CR-009）：仅影响异常标签派生与查询/导出边界
     activation-timeout: PT30M
@@ -63,28 +41,6 @@ tsp:
     export-max-rows: 10000
     default-page-size: 20
     max-page-size: 200
-  device-admission:
-    # 设备接入准入 PKI 吐销检查发布门禁（TSP-DSN-CR-011 §8）：默认关闭，
-    # 关闭时准入 readiness 为 NOT_READY，但准入请求仍 fail-closed（不得跳过检查后 ALLOW）
-    pki-revocation:
-      enabled: ${TSP_DEVICE_ADMISSION_PKI_REVOCATION_ENABLED:false}
-
-management:
-  endpoint:
-    health:
-      group:
-        # 注册激活专用健康组：仅代表 DEVICE_ONLINE 消费能力，不影响全局 readiness
-        registrationActivation:
-          include: deviceOnlineConsumer
-        # V2C 激活专用健康组（TSP-DSN-CR-012 §9）：
-        # topic/ACL + consumer group + 契约版本 + Inbox + retry/DLT 就绪度，不拖垮全局 readiness
-        keyprovActivation:
-          include: tboxV2cKeyProvisionedConsumer
-        # 设备接入准入专用健康组（TSP-DSN-CR-011 §8）：
-        # deviceAdmission 为 TSP 发布门禁，pkiRevocation 为 framework 吐销能力就绪度；
-        # 两者均不得拖垮查询类能力的全局 readiness
-        deviceAdmission:
-          include: deviceAdmission,pkiRevocation
 
 mybatis-plus:
   type-aliases-package: net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po

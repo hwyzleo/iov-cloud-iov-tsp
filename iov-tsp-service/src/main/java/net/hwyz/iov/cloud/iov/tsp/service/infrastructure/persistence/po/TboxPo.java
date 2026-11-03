@@ -116,6 +116,30 @@ public class TboxPo extends BasePo {
     private LocalDateTime lastLoginTime;
 
     /**
+     * VIAM 投影同步状态: UNKNOWN/SYNCED/PARTIAL/STALE；NULL=从未同步（投影缺失）
+     */
+    @TableField("viam_sync_status")
+    private String viamSyncStatus;
+
+    /**
+     * VIAM 投影最后成功对账/快照应用时间（≠事实时间）
+     */
+    @TableField("viam_last_reconciled_at")
+    private LocalDateTime viamLastReconciledAt;
+
+    /**
+     * VIAM 安全状态版本（预留；当前 VIAM 快照 API 未提供，NULL=未知）
+     */
+    @TableField("viam_security_version")
+    private Long viamSecurityVersion;
+
+    /**
+     * TSP 运营退役时间（独立表达，与安全 BLOCKED/RETIRED 分离；NULL=未运营退役）
+     */
+    @TableField("operational_retired_at")
+    private LocalDateTime operationalRetiredAt;
+
+    /**
      * 集成电路卡识别码1
      */
     @TableField("iccid1")

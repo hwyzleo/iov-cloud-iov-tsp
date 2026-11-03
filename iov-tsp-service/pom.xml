@@ -23,6 +23,13 @@
             <artifactId>iov-tsp-api</artifactId>
         </dependency>
 
+        <!-- VIAM 官方安全事件/快照契约（IOV-TSP-DSN-CR-016：TSP 消费 VIAM 权威事实，不复制第二套契约） -->
+        <dependency>
+            <groupId>net.hwyz.iov.cloud.sec</groupId>
+            <artifactId>sec-viam-api</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
         <!-- 框架: MySQL -->
         <dependency>
             <groupId>net.hwyz.iov.cloud.framework</groupId>

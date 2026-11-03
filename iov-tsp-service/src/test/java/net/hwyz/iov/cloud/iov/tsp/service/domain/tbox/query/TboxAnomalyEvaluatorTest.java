@@ -25,13 +25,21 @@ class TboxAnomalyEvaluatorTest {
 
     private final TboxAnomalyEvaluator evaluator = new TboxAnomalyEvaluator();
 
+    /**
+     * IOV-TSP-DSN-CR-016：默认构造「VIAM 投影已同步」视图，保证安全状态标签可派生；
+     * 投影缺失场景单独覆盖。
+     */
+    private TboxManagementView.TboxManagementViewBuilder syncedView() {
+        return TboxManagementView.builder().viamSyncStatus("SYNCED");
+    }
+
     private List<TboxAnomalyType> types(List<AnomalyTag> tags) {
         return tags.stream().map(AnomalyTag::type).toList();
     }
 
     @Test
     void bindingConflict_ShouldBeHighestPriority_AndHaveNoDuration() {
-        TboxManagementView view = TboxManagementView.builder()
+        TboxManagementView view = syncedView()
                 .deviceStatus(2).bindCount(2).firstLoginTime(NOW).build();
 
         List<AnomalyTag> tags = evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE);
@@ -44,9 +52,9 @@ class TboxAnomalyEvaluatorTest {
 
     @Test
     void frozenOrRetired_ShouldDeriveTag() {
-        TboxManagementView blocked = TboxManagementView.builder()
+        TboxManagementView blocked = syncedView()
                 .deviceStatus(4).bindCount(1).firstLoginTime(NOW).build();
-        TboxManagementView retired = TboxManagementView.builder()
+        TboxManagementView retired = syncedView()
                 .deviceStatus(3).bindCount(1).firstLoginTime(NOW).build();
 
         assertTrue(types(evaluator.evaluate(blocked, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE))
@@ -58,7 +66,7 @@ class TboxAnomalyEvaluatorTest {
     @Test
     void activationTimeout_ShouldUseFirstLoginAsSince() {
         LocalDateTime firstLogin = NOW.minusMinutes(31);
-        TboxManagementView view = TboxManagementView.builder()
+        TboxManagementView view = syncedView()
                 .deviceStatus(5).bindCount(1).firstLoginTime(firstLogin).build();
 
         List<AnomalyTag> tags = evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE);
@@ -70,7 +78,7 @@ class TboxAnomalyEvaluatorTest {
 
     @Test
     void activationTimeout_ShouldNotTriggerAtBoundary() {
-        TboxManagementView view = TboxManagementView.builder()
+        TboxManagementView view = syncedView()
                 .deviceStatus(5).bindCount(1).firstLoginTime(NOW.minus(ACTIVATION_TIMEOUT)).build();
 
         assertFalse(types(evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE))
@@ -80,7 +88,7 @@ class TboxAnomalyEvaluatorTest {
     @Test
     void neverOnline_ShouldUseCreateTimeAsSince() {
         LocalDateTime created = NOW.minusDays(2);
-        TboxManagementView view = TboxManagementView.builder()
+        TboxManagementView view = syncedView()
                 .deviceStatus(1).bindCount(1).createTime(created).build();
 
         List<AnomalyTag> tags = evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE);
@@ -92,7 +100,7 @@ class TboxAnomalyEvaluatorTest {
 
     @Test
     void neverOnline_WithoutCreateTime_DurationIsNull() {
-        TboxManagementView view = TboxManagementView.builder().deviceStatus(1).bindCount(1).build();
+        TboxManagementView view = syncedView().deviceStatus(1).bindCount(1).build();
 
         AnomalyTag tag = evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE).stream()
                 .filter(t -> t.type() == TboxAnomalyType.NEVER_ONLINE).findFirst().orElseThrow();
@@ -104,7 +112,7 @@ class TboxAnomalyEvaluatorTest {
     @Test
     void longOffline_ShouldUseLastLoginAsSince() {
         LocalDateTime lastLogin = NOW.minusDays(31);
-        TboxManagementView view = TboxManagementView.builder()
+        TboxManagementView view = syncedView()
                 .deviceStatus(2).bindCount(1).firstLoginTime(lastLogin).lastLoginTime(lastLogin).build();
 
         List<AnomalyTag> tags = evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE);
@@ -116,7 +124,7 @@ class TboxAnomalyEvaluatorTest {
 
     @Test
     void unbound_ShouldDeriveTag() {
-        TboxManagementView view = TboxManagementView.builder()
+        TboxManagementView view = syncedView()
                 .deviceStatus(2).bindCount(0).firstLoginTime(NOW).build();
 
         List<AnomalyTag> tags = evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE);
@@ -127,7 +135,7 @@ class TboxAnomalyEvaluatorTest {
 
     @Test
     void multipleTags_ShouldBeOrderedByPriority() {
-        TboxManagementView view = TboxManagementView.builder()
+        TboxManagementView view = syncedView()
                 .deviceStatus(4).bindCount(2).build();
 
         List<TboxAnomalyType> types = types(evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE));
@@ -141,5 +149,34 @@ class TboxAnomalyEvaluatorTest {
     @Test
     void nullView_ShouldReturnEmpty() {
         assertTrue(evaluator.evaluate(null, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE).isEmpty());
+    }
+
+    /**
+     * IOV-TSP-DSN-CR-016：VIAM 投影缺失（viamSyncStatus=null）时安全字段不可信，
+     * 不派生 NEVER_ONLINE / FROZEN_OR_RETIRED / ACTIVATION_TIMEOUT / LONG_OFFLINE；
+     * 仅保留与投影无关的 BINDING_CONFLICT/UNBOUND。
+     */
+    @Test
+    void projectionMissing_ShouldNotDeriveSecurityTags() {
+        TboxManagementView view = TboxManagementView.builder()
+                .bindCount(1).build(); // 无 viamSyncStatus = 从未同步；first/lastLoginTime 均未知
+
+        List<AnomalyTag> tags = evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE);
+
+        assertFalse(types(tags).contains(TboxAnomalyType.NEVER_ONLINE), "投影缺失不得误判 NEVER_ONLINE");
+        assertFalse(types(tags).contains(TboxAnomalyType.FROZEN_OR_RETIRED));
+        assertFalse(types(tags).contains(TboxAnomalyType.ACTIVATION_TIMEOUT));
+        assertFalse(types(tags).contains(TboxAnomalyType.LONG_OFFLINE));
+    }
+
+    @Test
+    void projectionMissing_WithBlockedCode_ShouldNotDeriveFrozen() {
+        // 即使 device_status 残留旧值，投影缺失也不得按旧状态伪装最新事实
+        TboxManagementView view = TboxManagementView.builder()
+                .deviceStatus(4).bindCount(1).firstLoginTime(NOW).build();
+
+        List<AnomalyTag> tags = evaluator.evaluate(view, NOW, ACTIVATION_TIMEOUT, LONG_OFFLINE);
+
+        assertFalse(types(tags).contains(TboxAnomalyType.FROZEN_OR_RETIRED));
     }
 }

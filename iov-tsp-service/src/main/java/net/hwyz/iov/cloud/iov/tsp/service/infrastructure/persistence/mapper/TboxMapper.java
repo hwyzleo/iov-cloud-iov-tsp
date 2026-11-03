@@ -43,40 +43,41 @@ public interface TboxMapper extends BaseDao<TboxPo, Long> {
     java.util.List<TboxPo> selectAllByHsm(@Param("hsm") String hsm);
 
     /**
-     * 记录成功登录（幂等，按已解析主键更新）
-     * first_login_time set-once；last_login_time 取 max(existing, ts)；
-     * PRE_ACTIVE -> ACTIVATING；ACTIVE 仅刷新 last_login_time；BLOCKED/RETIRED 不更新。
-     * TSP-DSN-CR-010：不再使用非唯一 WHERE hsm=?，改按主键条件更新。
+     * VIAM 投影：最近登录事实单调更新（IOV-TSP-DSN-CR-016）。
+     * 唯一业务写入者=VIAM 安全投影处理链；last_login_time 取 max(existing, ts)（单调）；
+     * 不写 first_login_time/device_status/activate_time（由快照或明确契约承载）。
      *
-     * @param id               设备主键
-     * @param ts               事件时间
-     * @param preActiveStatus  PRE_ACTIVE 码值
-     * @param activatingStatus ACTIVATING 码值
-     * @param activeStatus     ACTIVE 码值
+     * @param id          设备主键
+     * @param ts          成功接入事实时间（occurredAt，UTC 墙钟）
+     * @param projectedAt 投影更新时间（≠事实时间）
+     * @param syncStatus  VIAM 投影同步状态
      * @return 更新行数
      */
-    int recordLoginById(@Param("id") Long id,
-                        @Param("ts") LocalDateTime ts,
-                        @Param("preActiveStatus") Integer preActiveStatus,
-                        @Param("activatingStatus") Integer activatingStatus,
-                        @Param("activeStatus") Integer activeStatus);
+    int applyViamLoginFact(@Param("id") Long id,
+                           @Param("ts") LocalDateTime ts,
+                           @Param("projectedAt") LocalDateTime projectedAt,
+                           @Param("syncStatus") String syncStatus);
 
     /**
-     * 完成业务激活（幂等）
-     * 仅当 device_status = ACTIVATING AND activate_time IS NULL 时更新为 ACTIVE 并写入 activate_time
-     * <p>
-     * TSP-DSN-CR-012 §6：按已解析主键条件更新（不使用非唯一 hsm/sn 条件），
-     * 与 Inbox 成功事实处于同一数据库事务。
+     * VIAM 投影：应用安全开通快照（IOV-TSP-DSN-CR-016）。
+     * 以 VIAM 权威快照为准写入 device_status/first_login_time（set-once 权威值，不锁死本地旧值）；
+     * last_login_time 单调 max（防乱序）；不写 activate_time（V-GAP-3：语义未明确，保持未知）。
      *
-     * @param id               设备主键
-     * @param activateTime     激活时间
-     * @param activatingStatus ACTIVATING 码值
-     * @param activeStatus     ACTIVE 码值
+     * @param id             设备主键
+     * @param deviceStatus   安全开通状态码（VIAM state 映射）
+     * @param firstLoginTime 首次可信成功接入时间（VIAM 权威）
+     * @param lastLoginTime  最近可信成功接入时间（VIAM 权威）
+     * @param securityVersion VIAM 安全版本（V-GAP-1：当前快照未提供，null=未知）
+     * @param projectedAt    投影更新时间
+     * @param syncStatus     VIAM 投影同步状态
      * @return 更新行数
      */
-    int completeActivationById(@Param("id") Long id,
-                               @Param("activateTime") LocalDateTime activateTime,
-                               @Param("activatingStatus") Integer activatingStatus,
-                               @Param("activeStatus") Integer activeStatus);
+    int applyViamSnapshot(@Param("id") Long id,
+                          @Param("deviceStatus") Integer deviceStatus,
+                          @Param("firstLoginTime") LocalDateTime firstLoginTime,
+                          @Param("lastLoginTime") LocalDateTime lastLoginTime,
+                          @Param("securityVersion") Long securityVersion,
+                          @Param("projectedAt") LocalDateTime projectedAt,
+                          @Param("syncStatus") String syncStatus);
 
 }
