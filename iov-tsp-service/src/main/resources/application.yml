@@ -11,7 +11,7 @@ tsp:
   # VIAM 安全投影消费（IOV-TSP-DSN-CR-016）：默认关闭，旧 TSP 安全写链停用（联合切换）后启用。
   # 事件仅作触发/事实更新，安全状态以 VIAM 官方快照为准；Inbox 仅存契约摘要，不存敏感 payload。
   viam-projection:
-    enabled: ${TSP_VIAM_PROJECTION_ENABLED:false}
+    enabled: ${TSP_VIAM_PROJECTION_ENABLED:true}
     consumer:
       group-id: iov-tsp-viam-projection
       topics:
