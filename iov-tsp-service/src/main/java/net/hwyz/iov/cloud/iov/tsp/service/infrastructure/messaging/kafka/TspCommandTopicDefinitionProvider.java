@@ -2,8 +2,10 @@ package net.hwyz.iov.cloud.iov.tsp.service.infrastructure.messaging.kafka;
 
 import net.hwyz.iov.cloud.framework.kafka.topic.KafkaTopicDefinition;
 import net.hwyz.iov.cloud.framework.kafka.topic.KafkaTopicDefinitionProvider;
+import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspUserVehicleProperties;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -30,8 +32,30 @@ public class TspCommandTopicDefinitionProvider implements KafkaTopicDefinitionPr
     private static final int PARTITIONS = 6;
     private static final short REPLICATION_FACTOR = 1;
 
+    private final TspUserVehicleProperties userVehicleProperties;
+
+    public TspCommandTopicDefinitionProvider(TspUserVehicleProperties userVehicleProperties) {
+        this.userVehicleProperties = userVehicleProperties;
+    }
+
+    /**
+     * TSP 作为 Producer 的 Topic：
+     * <ul>
+     *   <li>{@code tbox-vagw-cmd}：远控下行命令；</li>
+     *   <li>{@code tsp.user-vehicle-activation-fact}：用户绑车首次激活候选事实（IOV-TSP-DSN-CR-017，
+     *       默认启用，需在 FW-KAFKA Topic 目录登记；VMD 为消费者）。</li>
+     * </ul>
+     *
+     * @return Topic 定义集合
+     */
     @Override
     public Collection<KafkaTopicDefinition> topicDefinitions() {
-        return List.of(new KafkaTopicDefinition(TOPIC_TBOX_VAGW_CMD, PARTITIONS, REPLICATION_FACTOR));
+        List<KafkaTopicDefinition> definitions = new ArrayList<>();
+        definitions.add(new KafkaTopicDefinition(TOPIC_TBOX_VAGW_CMD, PARTITIONS, REPLICATION_FACTOR));
+        if (userVehicleProperties.getActivationFact().isPublishEnabled()) {
+            definitions.add(new KafkaTopicDefinition(userVehicleProperties.getActivationFact().getTopic(),
+                    PARTITIONS, REPLICATION_FACTOR));
+        }
+        return definitions;
     }
 }

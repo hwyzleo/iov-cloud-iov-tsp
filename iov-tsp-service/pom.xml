@@ -48,6 +48,20 @@
             <artifactId>framework-kafka-starter</artifactId>
         </dependency>
 
+        <!-- OTD-VSO 官方绑车事实查询契约（IOV-TSP-DSN-CR-017：同步核验账号—订单—VIN 与交付事实） -->
+        <dependency>
+            <groupId>net.hwyz.iov.cloud.otd</groupId>
+            <artifactId>otd-vso-api</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
+        <!-- MKT-CMS 官方协议内容契约（IOV-TSP-DSN-CR-017：两项协议不可变修订读取） -->
+        <dependency>
+            <groupId>net.hwyz.iov.cloud.mkt</groupId>
+            <artifactId>mkt-cms-api</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+
         <!-- 框架: Security（PKI 证书状态/吐销查询，TSP-DSN-CR-011） -->
         <dependency>
             <groupId>net.hwyz.iov.cloud.framework</groupId>
