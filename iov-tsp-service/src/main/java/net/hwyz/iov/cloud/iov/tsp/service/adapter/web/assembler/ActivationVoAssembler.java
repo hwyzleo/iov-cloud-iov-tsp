@@ -3,6 +3,8 @@ package net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.AgreementType;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ActivationAgreementVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ActivationAgreementsVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.response.UserVehicleRelationVo;
+import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.UserVehicleRelationResult;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementBundle;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementContent;
 
@@ -34,6 +36,25 @@ public final class ActivationVoAssembler {
                 .bundleId(bundle.bundleId())
                 .language(bundle.language())
                 .agreements(agreements)
+                .build();
+    }
+
+    /**
+     * 当前账号人车关系应用结果 → 响应 VO（IOV-TSP-DSN-CR-018 D018-02）
+     *
+     * @param result 应用查询结果
+     * @return 当前关系 VO
+     */
+    public static UserVehicleRelationVo toUserVehicleRelationVo(UserVehicleRelationResult result) {
+        if (result == null) {
+            return null;
+        }
+        return UserVehicleRelationVo.builder()
+                .status(result.getStatus())
+                .vin(result.getVin())
+                .relationId(result.getRelationId())
+                .role(result.getRole())
+                .boundAt(result.getBoundAt())
                 .build();
     }
 

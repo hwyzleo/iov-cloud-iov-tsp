@@ -51,7 +51,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <ol>
  *   <li><b>epoch-millis 回归组（CR-013 兼容阶段）</b>：MPT /list 五字段 epoch 毫秒数字（修复“数组”输出）、
  *       双读、启动探针、无关 customizer 共存（不再互相遮蔽）、Service/Feign VO 契约；</li>
- *   <li><b>iso 装配组（CR-015）</b>：date-format=iso 时 LocalDateTime 输出无偏移 ISO 展示墙钟字符串，
+ *   <li><b>iso 装配组（CR-015，按 FW-WEB-DSN-CR-003 统一形态）：date-format=iso 时 LocalDateTime
+ *       按 zone-id 解释为瞬时后输出固定 3 位毫秒 + {@code Z} 字符串，
  *       MPT /list 经请求时区（X-Timezone &gt; 默认 Asia/Shanghai）投影：上海 +8、UTC 保持、无头默认上海。</li>
  * </ol>
  * ISO 输出（FR-013-1）为切换阶段验收目标，本阶段不启用（TSP-DSN-CR-013 §6）；CR-015 对 MPT 投影字段作局部例外。
@@ -176,7 +177,7 @@ class TspJacksonTimeContractTest {
     // ---------- iso 装配组（TSP-DSN-CR-015：展示墙钟投影） ----------
 
     @Test
-    void iso_mptList时间字段_输出无偏移ISO展示墙钟字符串() {
+    void iso_mptList时间字段_输出固定毫秒UTC字符串() {
         ObjectMapper mapper = isoMapper();
         MptTboxSummaryVo vo = MptTboxSummaryVo.builder()
                 .sn("SN-1")
@@ -186,9 +187,9 @@ class TspJacksonTimeContractTest {
 
         JsonNode node = mapper.valueToTree(vo);
         assertTrue(node.get("firstLoginTime").isTextual());
-        assertEquals("2026-09-02T08:00:00", node.get("firstLoginTime").asText());
-        assertEquals("2026-09-10T08:00:00", node.get("lastLoginTime").asText());
-        // 无 offset 字符串（LocalDateTime 语义），不是数组/数字
+        assertEquals("2026-09-02T08:00:00.000Z", node.get("firstLoginTime").asText());
+        assertEquals("2026-09-10T08:00:00.000Z", node.get("lastLoginTime").asText());
+        // FW-WEB-DSN-CR-003：统一固定 3 位毫秒 + Z（LocalDateTime 按 zone-id 解释为瞬时），不是数组/数字
         assertFalse(node.get("firstLoginTime").isArray());
         assertFalse(node.get("firstLoginTime").isIntegralNumber());
     }
@@ -214,18 +215,18 @@ class TspJacksonTimeContractTest {
                 .total(1).page(1).size(20).build());
         MockMvc mockMvc = mptMockMvc(appService, mapper);
 
-        // 上海头 → +8
+        // 上海头 → +8，FW-WEB-DSN-CR-003 固定毫秒 + Z 形态
         mockMvc.perform(get("/api/mpt/tbox/v1/list").header("X-Timezone", "Asia/Shanghai"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].lastLoginTime").value("2026-09-02T16:00:00"));
+                .andExpect(jsonPath("$.data.items[0].lastLoginTime").value("2026-09-02T16:00:00.000Z"));
         // UTC 头 → 保持
         mockMvc.perform(get("/api/mpt/tbox/v1/list").header("X-Timezone", "UTC"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].lastLoginTime").value("2026-09-02T08:00:00"));
+                .andExpect(jsonPath("$.data.items[0].lastLoginTime").value("2026-09-02T08:00:00.000Z"));
         // 无头 → 框架默认 Asia/Shanghai → +8
         mockMvc.perform(get("/api/mpt/tbox/v1/list"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].lastLoginTime").value("2026-09-02T16:00:00"));
+                .andExpect(jsonPath("$.data.items[0].lastLoginTime").value("2026-09-02T16:00:00.000Z"));
     }
 
     // ---------- 双读：13 位毫秒 / 10 位秒 / ISO 同一时刻；非法格式拒绝 ----------

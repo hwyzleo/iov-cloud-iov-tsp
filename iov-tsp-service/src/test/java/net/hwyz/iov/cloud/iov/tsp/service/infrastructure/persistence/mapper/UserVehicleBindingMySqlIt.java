@@ -164,6 +164,44 @@ class UserVehicleBindingMySqlIt {
     }
 
     @Test
+    @DisplayName("当前关系查询：仅返回本人 ACTIVE 且 row_valid=1 的关系，不泄露他人")
+    void currentRelationQueryIsAccountIsolated() throws Exception {
+        assumeDb();
+        clean("ITVIN00000000006");
+        String vin = "ITVIN00000000006";
+        LocalDateTime now = LocalDateTime.parse("2026-11-21T10:00:00");
+        try (SqlSession session = sqlSessionFactory.openSession(true)) {
+            UserVehicleRelationMapper mapper = session.getMapper(UserVehicleRelationMapper.class);
+            Statement statement = session.getConnection().createStatement();
+
+            mapper.insert(UserVehicleRelationPo.builder().relationId("REL-IT-Q1").accountId("acc-1").vin(vin)
+                    .role("PRIMARY_USER").state("ACTIVE").boundAt(now).sourceOperationId("BOP-IT-Q1").build());
+            // 本人 ACTIVE 可查到；其他账号查不到，且不按 VIN 反查他人关系
+            UserVehicleRelationPo own = mapper.selectActiveByAccountAndVin("acc-1", vin);
+            assertThat(own).isNotNull();
+            assertThat(own.getRelationId()).isEqualTo("REL-IT-Q1");
+            assertThat(mapper.selectActiveByAccountAndVin("acc-2", vin)).isNull();
+
+            // RELEASED 自然映射为无关系
+            statement.execute("UPDATE tb_user_vehicle_relation SET state = 'RELEASED' WHERE relation_id = 'REL-IT-Q1'");
+            session.clearCache();
+            assertThat(mapper.selectActiveByAccountAndVin("acc-1", vin)).isNull();
+
+            // 逻辑删除自然映射为无关系
+            statement.execute("UPDATE tb_user_vehicle_relation SET state = 'ACTIVE', row_valid = 0 "
+                    + "WHERE relation_id = 'REL-IT-Q1'");
+            session.clearCache();
+            assertThat(mapper.selectActiveByAccountAndVin("acc-1", vin)).isNull();
+
+            // 仅存在他人有效关系时，当前账号仍为无关系
+            mapper.insert(UserVehicleRelationPo.builder().relationId("REL-IT-Q2").accountId("acc-2").vin(vin)
+                    .role("PRIMARY_USER").state("ACTIVE").boundAt(now).sourceOperationId("BOP-IT-Q2").build());
+            assertThat(mapper.selectActiveByAccountAndVin("acc-1", vin)).isNull();
+            assertThat(mapper.selectActiveByAccountAndVin("acc-2", vin).getRelationId()).isEqualTo("REL-IT-Q2");
+        }
+    }
+
+    @Test
     @DisplayName("会话条件更新：版本不符/过期/已认领均拒绝，有效请求恰好成功一次")
     void sessionConditionalClaim() throws Exception {
         assumeDb();

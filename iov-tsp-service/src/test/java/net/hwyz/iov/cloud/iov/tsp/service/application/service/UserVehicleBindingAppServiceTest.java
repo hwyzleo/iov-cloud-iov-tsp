@@ -5,6 +5,7 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.ActivationSessionState;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingCallerScope;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingOperationStatus;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingResultReason;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.UserVehicleRelationStatus;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.request.ConfirmVehicleBindingRequest;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ConfirmVehicleBindingVo;
 import net.hwyz.iov.cloud.iov.tsp.service.common.exception.UserVehicleBindingErrorCode;
@@ -60,6 +61,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -320,6 +322,65 @@ class UserVehicleBindingAppServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
                         .isEqualTo(UserVehicleBindingErrorCode.SESSION_EXPIRED.getCode()));
+    }
+
+    // ================= 当前关系查询（IOV-TSP-DSN-CR-018） =================
+
+    @Test
+    @DisplayName("当前关系：存在有效关系返回 BOUND 且不读写其他事实")
+    void queryCurrentRelationReturnsBound() {
+        Instant boundAt = Instant.parse("2026-11-21T10:00:00Z");
+        when(userVehicleRelationRepository.findActiveByAccountAndVin(ACCOUNT, VIN))
+                .thenReturn(Optional.of(UserVehicleRelation.builder()
+                        .relationId("REL-1").accountId(ACCOUNT).vin(VIN).role("PRIMARY_USER")
+                        .state("ACTIVE").boundAt(boundAt).sourceOperationId("BOP-1")
+                        .ruleVersion("R1").factRef("fact-1").rowVersion(1).build()));
+
+        var result = appService.queryCurrentRelation(ACCOUNT, VIN);
+
+        assertThat(result.getStatus()).isEqualTo(UserVehicleRelationStatus.BOUND);
+        assertThat(result.getVin()).isEqualTo(VIN);
+        assertThat(result.getRelationId()).isEqualTo("REL-1");
+        assertThat(result.getRole()).isEqualTo("PRIMARY_USER");
+        assertThat(result.getBoundAt()).isEqualTo(boundAt);
+        verify(userVehicleRelationRepository).findActiveByAccountAndVin(ACCOUNT, VIN);
+        verify(userVehicleRelationRepository, never()).findActiveByVin(anyString());
+        verify(userVehicleRelationRepository, never()).insert(any());
+        verifyNoInteractions(agreementContentPort, vehicleFactsPort, orderDeliveryFactsPort,
+                activationSessionRepository, bindingOperationRepository, activationFactRepository,
+                userVehicleAuditRepository, transactionManager);
+    }
+
+    @Test
+    @DisplayName("当前关系：无有效关系返回 NOT_BOUND，不按 VIN 反查他人关系")
+    void queryCurrentRelationReturnsNotBound() {
+        when(userVehicleRelationRepository.findActiveByAccountAndVin(ACCOUNT, VIN)).thenReturn(Optional.empty());
+
+        var result = appService.queryCurrentRelation(ACCOUNT, VIN);
+
+        assertThat(result.getStatus()).isEqualTo(UserVehicleRelationStatus.NOT_BOUND);
+        assertThat(result.getVin()).isEqualTo(VIN);
+        assertThat(result.getRelationId()).isNull();
+        assertThat(result.getRole()).isNull();
+        assertThat(result.getBoundAt()).isNull();
+        verify(userVehicleRelationRepository, never()).findActiveByVin(anyString());
+        verify(userVehicleRelationRepository, never()).insert(any());
+        verifyNoInteractions(agreementContentPort, vehicleFactsPort, orderDeliveryFactsPort,
+                activationSessionRepository, bindingOperationRepository, activationFactRepository,
+                userVehicleAuditRepository, transactionManager);
+    }
+
+    @Test
+    @DisplayName("当前关系：数据库异常向上传递，不得伪装为 NOT_BOUND")
+    void queryCurrentRelationPropagatesRepositoryFailure() {
+        when(userVehicleRelationRepository.findActiveByAccountAndVin(ACCOUNT, VIN))
+                .thenThrow(new IllegalStateException("db down"));
+
+        assertThatThrownBy(() -> appService.queryCurrentRelation(ACCOUNT, VIN))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("db down");
+        verify(userVehicleRelationRepository, never()).insert(any());
+        verify(userVehicleAuditRepository, never()).insert(any());
     }
 
     // ================= 协议同意证据（CMS 契约对齐） =================

@@ -9,6 +9,7 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingCallerScope;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingEligibility;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingOperationStatus;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingResultReason;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.UserVehicleRelationStatus;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.request.AgreementAcceptanceRequest;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.request.ConfirmVehicleBindingRequest;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ActivationResultVo;
@@ -16,6 +17,7 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.response.BindingOperationVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ConfirmVehicleBindingVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.CreateActivationSessionVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ScanActivationSessionVo;
+import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.UserVehicleRelationResult;
 import net.hwyz.iov.cloud.iov.tsp.service.common.exception.UserVehicleBindingErrorCode;
 import net.hwyz.iov.cloud.iov.tsp.service.common.util.DigestUtils;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationFact;
@@ -54,7 +56,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * 用户车辆绑定应用服务（IOV-TSP-DSN-CR-017 D017-02/D017-03/D017-04/D017-05）。
+ * 用户车辆绑定应用服务（IOV-TSP-DSN-CR-017 D017-02/D017-03/D017-04/D017-05、IOV-TSP-DSN-CR-018 D018-02）。
  * <p>
  * 编排一次性会话、车辆/交付事实读取、资格决策、原子绑定与结果恢复；
  * 外部 RPC 一律在数据库事务与行锁之外执行，事务内按固定顺序锁定会话与幂等操作，
@@ -289,6 +291,36 @@ public class UserVehicleBindingAppService {
             throw business(UserVehicleBindingErrorCode.INVALID_REQUEST);
         }
         return toOperationVo(operation);
+    }
+
+    /**
+     * 查询当前账号在指定 VIN 上的人车关系（IOV-TSP-DSN-CR-018 D018-02）。
+     * <p>
+     * 仅复用账号隔离的仓储查询：存在有效关系返回 BOUND，不存在（含已 RELEASED、逻辑删除、
+     * 仅他人关系）返回 NOT_BOUND。全程只读，不调用 VSO/VMD/VIAM，不写关系/审计/Outbox；
+     * 数据库异常向上传递，禁止在此构造 NOT_BOUND。
+     *
+     * @param accountId 可信账号
+     * @param vin       已规范化的 VIN
+     * @return 当前关系应用结果
+     */
+    public UserVehicleRelationResult queryCurrentRelation(String accountId, String vin) {
+        Optional<UserVehicleRelation> relation =
+                userVehicleRelationRepository.findActiveByAccountAndVin(accountId, vin);
+        if (relation.isEmpty()) {
+            return UserVehicleRelationResult.builder()
+                    .status(UserVehicleRelationStatus.NOT_BOUND)
+                    .vin(vin)
+                    .build();
+        }
+        UserVehicleRelation active = relation.get();
+        return UserVehicleRelationResult.builder()
+                .status(UserVehicleRelationStatus.BOUND)
+                .vin(active.getVin())
+                .relationId(active.getRelationId())
+                .role(active.getRole())
+                .boundAt(active.getBoundAt())
+                .build();
     }
 
     /**
