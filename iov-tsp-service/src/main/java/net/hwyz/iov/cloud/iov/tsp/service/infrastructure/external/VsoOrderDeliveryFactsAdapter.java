@@ -50,13 +50,15 @@ public class VsoOrderDeliveryFactsAdapter implements OrderDeliveryFactsPort {
         }
         DeliveryFactsQuality quality = mapQuality(response.getLookupStatus());
         if (quality != DeliveryFactsQuality.MATCHED || response.getFacts() == null || response.getFacts().isEmpty()) {
-            return new DeliveryFacts(quality, false, List.of(), null, null, response.getCheckedAt());
+            // 非 MATCHED 也保留查询结论与原因码，便于审计与事后复核（不含 PII）
+            return new DeliveryFacts(quality, false, List.of(), null,
+                    buildLookupRef(response, quality), response.getCheckedAt());
         }
         BindingFactsQueryResponse.Fact fact = response.getFacts().get(0);
         boolean delivered = fact.getDeliveryStatus() == BindingDeliveryStatus.DELIVERED;
         return new DeliveryFacts(quality, delivered,
                 fact.getMatchedRoles() == null ? List.of() : fact.getMatchedRoles(),
-                fact.getOrderNo(), buildFactRef(fact), response.getCheckedAt());
+                fact.getOrderNo(), buildFactRef(fact, response), response.getCheckedAt());
     }
 
     private DeliveryFactsQuality mapQuality(BindingLookupStatus status) {
@@ -70,11 +72,22 @@ public class VsoOrderDeliveryFactsAdapter implements OrderDeliveryFactsPort {
     }
 
     /**
+     * 非 MATCHED 结论的引用摘要（只含核验状态与原因码，不含 PII）
+     */
+    private String buildLookupRef(BindingFactsQueryResponse response, DeliveryFactsQuality quality) {
+        String reasonCode = response.getReasonCode() == null ? "-" : response.getReasonCode().toString();
+        return "lookup=" + quality.name() + ";reason=" + reasonCode;
+    }
+
+    /**
      * 事实引用只保留业务标识与真实版本，不复制订单快照或客户 PII
      */
-    private String buildFactRef(BindingFactsQueryResponse.Fact fact) {
+    private String buildFactRef(BindingFactsQueryResponse.Fact fact, BindingFactsQueryResponse response) {
         List<String> refs = new ArrayList<>();
         refs.add("schemaVersion=1");
+        if (response.getReasonCode() != null) {
+            refs.add("reason=" + response.getReasonCode());
+        }
         if (fact.getOrderNo() != null) {
             refs.add("order=" + fact.getOrderNo());
         }

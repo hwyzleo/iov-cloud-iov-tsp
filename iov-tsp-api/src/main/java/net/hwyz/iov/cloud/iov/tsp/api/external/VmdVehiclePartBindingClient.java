@@ -11,7 +11,8 @@ import java.util.List;
 /**
  * VMD 车辆-零件绑定关系只读查询契约（IOV-TSP-DSN-CR-017 校正）
  * <p>
- * 与 EDD-VMD 实际发布契约保持一致（{@code VmdVehiclePartBindingService}）：
+ * 与 EDD-VMD 实际发布契约保持一致（{@code VmdVehiclePartBindingService}）：服务名 {@code edd-vmd}
+ * （与 VMD {@code spring.application.name} 及 {@code ServiceNameConstants.EDD_VMD} 一致）。
  * <ul>
  *   <li>基础路径：{@code /api/service/vehiclePartBinding/v1}</li>
  *   <li>按 VIN 查 active 绑定：{@code GET /vin/{vin}/active}</li>
@@ -22,7 +23,7 @@ import java.util.List;
  *
  * @author hwyz_leo
  */
-@FeignClient(name = "iov-vmd", path = "/api/service/vehiclePartBinding/v1",
+@FeignClient(name = "edd-vmd", path = "/api/service/vehiclePartBinding/v1",
         fallbackFactory = VmdVehiclePartBindingClientFallbackFactory.class)
 public interface VmdVehiclePartBindingClient {
 

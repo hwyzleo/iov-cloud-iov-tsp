@@ -39,7 +39,16 @@ public class TrustedCallerResolver {
     }
 
     /**
-     * 解析可信账号（不校验客户端类型，供共享入口使用）
+     * 设备主体前缀（CIAM 设备身份令牌 {@code sub=device:<principal>}）。
+     * 设备令牌不得被当作账号使用（如 Account+VIN 隐私授权上报）。
+     */
+    private static final String DEVICE_SUBJECT_PREFIX = "device:";
+
+    /**
+     * 解析可信账号（不校验客户端类型，供共享入口使用）。
+     * <p>
+     * 拒绝设备主体：CIAM 设备令牌的 {@code sub} 形如 {@code device:<principal>}，
+     * 若直接当账号会把设备主体写成 Account+VIN 的账号，必须 fail-closed。
      *
      * @return 账号标识
      */
@@ -48,7 +57,12 @@ public class TrustedCallerResolver {
         if (userId == null || userId.isBlank()) {
             throw new BusinessException(UserVehicleBindingErrorCode.INVALID_REQUEST);
         }
-        return userId.trim();
+        String normalized = userId.trim();
+        if (normalized.toLowerCase(java.util.Locale.ROOT).startsWith(DEVICE_SUBJECT_PREFIX)) {
+            // 设备令牌只能用于车端能力，账号级接口必须使用用户令牌
+            throw new BusinessException(UserVehicleBindingErrorCode.INVALID_REQUEST);
+        }
+        return normalized;
     }
 
     /**

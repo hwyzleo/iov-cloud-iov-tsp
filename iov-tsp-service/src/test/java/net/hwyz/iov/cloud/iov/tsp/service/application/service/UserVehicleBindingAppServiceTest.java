@@ -38,6 +38,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.AgreementType;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.request.AgreementAcceptanceRequest;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementBundle;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementContent;
+
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -315,5 +320,50 @@ class UserVehicleBindingAppServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
                         .isEqualTo(UserVehicleBindingErrorCode.SESSION_EXPIRED.getCode()));
+    }
+
+    // ================= 协议同意证据（CMS 契约对齐） =================
+
+    private AgreementBundle bundle() {
+        return new AgreementBundle("B-1", "zh-CN", java.util.List.of(
+                new AgreementContent("PRIVACY_POLICY", "1.0", "REV-P", "zh-CN", "隐私政策", "sha256:p", "<p/>"),
+                new AgreementContent("USER_AGREEMENT", "1.0", "REV-U", "zh-CN", "用户协议", "sha256:u", "<p/>")));
+    }
+
+    private java.util.List<AgreementAcceptanceRequest> acceptances(String privacyHash, String userHash) {
+        return java.util.List.of(
+                AgreementAcceptanceRequest.builder().agreementType(AgreementType.PRIVACY_POLICY).agreed(true)
+                        .version("1.0").revisionId("REV-P").language("zh-CN").contentHash(privacyHash).build(),
+                AgreementAcceptanceRequest.builder().agreementType(AgreementType.USER_AGREEMENT).agreed(true)
+                        .version("1.0").revisionId("REV-U").language("zh-CN").contentHash(userHash).build());
+    }
+
+    @Test
+    @DisplayName("协议内容摘要与 CMS 已发布内容不一致：拒绝签发会话")
+    void createSessionRejectsContentHashMismatch() {
+        when(agreementContentPort.loadCurrent(anyString())).thenReturn(bundle());
+
+        assertThatThrownBy(() -> appService.createSession("device-ref", VIN, acceptances("sha256:tampered", "sha256:tampered")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
+                        .isEqualTo(UserVehicleBindingErrorCode.AGREEMENT_NOT_ACCEPTED.getCode()));
+        verify(activationSessionRepository, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("协议修订与内容摘要均匹配：签发会话并记录展示修订")
+    void createSessionAcceptsMatchingEvidence() {
+        when(agreementContentPort.loadCurrent(anyString())).thenReturn(bundle());
+        doAnswer(invocation -> {
+            ActivationSession session = invocation.getArgument(0);
+            session.setId(1L);
+            return null;
+        }).when(activationSessionRepository).insert(any(ActivationSession.class));
+
+        var result = appService.createSession("device-ref", VIN, acceptances("sha256:p", "sha256:u"));
+
+        assertThat(result.getSessionId()).isNotBlank();
+        assertThat(result.getQrToken()).isNotBlank();
+        verify(activationSessionRepository).insert(any(ActivationSession.class));
     }
 }

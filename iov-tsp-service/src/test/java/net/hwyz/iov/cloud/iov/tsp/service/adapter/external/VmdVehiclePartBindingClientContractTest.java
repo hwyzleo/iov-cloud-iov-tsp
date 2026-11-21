@@ -21,12 +21,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class VmdVehiclePartBindingClientContractTest {
 
     @Test
-    @DisplayName("基础路径与 VMD 实际契约一致：/api/service/vehiclePartBinding/v1")
+    @DisplayName("服务名与基础路径与 VMD 实际契约一致：edd-vmd + /api/service/vehiclePartBinding/v1")
     void basePathMatchesVmdContract() {
         FeignClient feignClient = VmdVehiclePartBindingClient.class.getAnnotation(FeignClient.class);
         assertThat(feignClient).isNotNull();
         assertThat(feignClient.path()).isEqualTo("/api/service/vehiclePartBinding/v1");
-        assertThat(feignClient.name()).isEqualTo("iov-vmd");
+        assertThat(feignClient.name()).isEqualTo("edd-vmd");
         assertThat(feignClient.fallbackFactory()).isEqualTo(VmdVehiclePartBindingClientFallbackFactory.class);
     }
 

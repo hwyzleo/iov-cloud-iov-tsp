@@ -347,6 +347,11 @@ public class UserVehicleBindingAppService {
                 // 拒绝与已发布修订不一致的同意证据（不得把可变 URL/最新版当作同意）
                 throw business(UserVehicleBindingErrorCode.AGREEMENT_NOT_ACCEPTED);
             }
+            if (!isBlank(acceptance.getContentHash()) && !isBlank(published.contentHash())
+                    && !acceptance.getContentHash().trim().equals(published.contentHash().trim())) {
+                // 客户端声明的内容摘要与 CMS 已发布内容不一致：拒绝，避免同意证据被替换
+                throw business(UserVehicleBindingErrorCode.AGREEMENT_NOT_ACCEPTED);
+            }
             acceptedTypes.add(type);
             revisions.add(type + ":" + acceptance.getRevisionId());
         }
@@ -622,6 +627,10 @@ public class UserVehicleBindingAppService {
 
     private String newId(String prefix) {
         return prefix + IdUtil.fastSimpleUUID().toUpperCase();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private boolean equalsText(String left, String right) {
