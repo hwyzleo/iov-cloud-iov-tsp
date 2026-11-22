@@ -12,9 +12,11 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.request.SkipActivationRequest;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ActivationAgreementsVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ActivationResultVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.CreateActivationSessionVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.response.LoginTicketVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ReportAckVo;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler.ActivationVoAssembler;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.support.TrustedCallerResolver;
+import net.hwyz.iov.cloud.iov.tsp.service.application.service.ActivationLoginTicketAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.ConsentAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.UserVehicleBindingAppService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,6 +42,7 @@ public class VehicleActivationController {
 
     private final UserVehicleBindingAppService userVehicleBindingAppService;
     private final ConsentAppService consentAppService;
+    private final ActivationLoginTicketAppService activationLoginTicketAppService;
     private final TrustedCallerResolver trustedCallerResolver;
 
     /**
@@ -97,6 +100,20 @@ public class VehicleActivationController {
         String vin = trustedCallerResolver.requireVehicleVin(request);
         log.info("车端[{}]查询会话[{}]绑定结果", maskVin(vin), sessionId);
         return ApiResponse.ok(userVehicleBindingAppService.queryVehicleResult(vin, sessionId));
+    }
+
+    /**
+     * 申请一次性登录票据（绑定成功且车机登录未完成时，IOV-TSP-DSN-CR-019 D019-02）
+     *
+     * @param sessionId 会话ID
+     * @return 票据原值、到期时刻、会话与关系标识
+     */
+    @PostMapping("/session/{sessionId}/login-ticket")
+    public ApiResponse<LoginTicketVo> issueLoginTicket(@PathVariable String sessionId,
+                                                       HttpServletRequest httpRequest) {
+        String vin = trustedCallerResolver.requireVehicleVin(httpRequest);
+        log.info("车端[{}]申请登录票据, sessionId={}", maskVin(vin), sessionId);
+        return ApiResponse.ok(activationLoginTicketAppService.issue(vin, sessionId));
     }
 
     /**

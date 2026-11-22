@@ -23,6 +23,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.PrivacyAuthorization
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleAuditRepository;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -53,6 +54,8 @@ public class ConsentAppService {
     private final PrivacyAuthorizationRepository privacyAuthorizationRepository;
     private final ActivationSessionRepository activationSessionRepository;
     private final UserVehicleAuditRepository userVehicleAuditRepository;
+    private final ActivationLoginTicketAppService activationLoginTicketAppService;
+    private final TransactionTemplate transactionTemplate;
     private final Clock clock;
 
     /**
@@ -122,20 +125,27 @@ public class ConsentAppService {
             throw business(UserVehicleBindingErrorCode.INVALID_REQUEST);
         }
         Instant now = clock.instant();
-        boolean duplicateReport = request.getReportId().equals(session.getIviLoginReportId());
-        if (!duplicateReport) {
-            if (!activationSessionRepository.reportIviLoginResult(session.getSessionId(), request.getLoginStatus(),
-                    request.getReportId(), now)) {
-                throw business(UserVehicleBindingErrorCode.REPORT_CONFLICT);
+        // D019-05：登录成功写入与未消费票据作废必须在同一事务，避免出现“已登录仍可换取票据”的窗口
+        ReportAckVo ack = transactionTemplate.execute(status -> {
+            boolean duplicateReport = request.getReportId().equals(session.getIviLoginReportId());
+            if (!duplicateReport) {
+                if (!activationSessionRepository.reportIviLoginResult(session.getSessionId(), request.getLoginStatus(),
+                        request.getReportId(), now)) {
+                    throw business(UserVehicleBindingErrorCode.REPORT_CONFLICT);
+                }
             }
+            if (request.getLoginStatus() == net.hwyz.iov.cloud.iov.tsp.api.vo.enums.IviLoginResultStatus.SUCCEEDED) {
+                saveAccountConsents(session, accountId, request, now);
+                activationLoginTicketAppService.revokeIssuedOnLoginSuccess(session.getSessionId(), vin, now);
+            }
+            audit("LOGIN_RECEIPT", request.getReportId(), vin, accountId, null, request.getLoginStatus().name(),
+                    SOURCE_VEHICLE, null, now);
+            return ReportAckVo.builder().reportId(request.getReportId()).accepted(true).build();
+        });
+        if (ack == null) {
+            throw business(UserVehicleBindingErrorCode.INVALID_REQUEST);
         }
-
-        if (request.getLoginStatus() == net.hwyz.iov.cloud.iov.tsp.api.vo.enums.IviLoginResultStatus.SUCCEEDED) {
-            saveAccountConsents(session, accountId, request, now);
-        }
-        audit("LOGIN_RECEIPT", request.getReportId(), vin, accountId, null, request.getLoginStatus().name(),
-                SOURCE_VEHICLE, null, now);
-        return ReportAckVo.builder().reportId(request.getReportId()).accepted(true).build();
+        return ack;
     }
 
     /**

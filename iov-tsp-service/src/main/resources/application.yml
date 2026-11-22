@@ -49,6 +49,13 @@ tsp:
       batch-size: 50
       max-retry: 10
       poll-interval-ms: 10000
+    # 一次性登录票据（IOV-TSP-DSN-CR-019）：短 TTL + 会话级签发上限；enabled=false 仅停止签发（回滚开关）
+    login-ticket:
+      enabled: true
+      ttl: PT3M
+      per-session-per-minute: 3
+      per-session-max-issue: 10
+      consumer: sec-ciam
   tbox-management:
     # TBOX 后台运营查询（MPT，TSP-DSN-CR-009）：仅影响异常标签派生与查询/导出边界
     activation-timeout: PT30M

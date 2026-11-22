@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.ActivationLoginTicketMapper">
+
+    <!-- 一次性登录票据查询映射（IOV-TSP-DSN-CR-019） -->
+    <resultMap id="baseResultMap"
+               type="net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.ActivationLoginTicketPo">
+        <id column="id" property="id" />
+        <result column="ticket_id" property="ticketId" />
+        <result column="ticket_hash" property="ticketHash" />
+        <result column="session_id" property="sessionId" />
+        <result column="binding_operation_id" property="bindingOperationId" />
+        <result column="vin" property="vin" />
+        <result column="account_id" property="accountId" />
+        <result column="relation_id" property="relationId" />
+        <result column="state" property="state" />
+        <result column="issued_at" property="issuedAt" />
+        <result column="expires_at" property="expiresAt" />
+        <result column="consumed_at" property="consumedAt" />
+        <result column="consumed_by" property="consumedBy" />
+        <result column="issue_seq" property="issueSeq" />
+        <result column="description" property="description" />
+        <result column="create_time" property="createTime" />
+        <result column="create_by" property="createBy" />
+        <result column="modify_time" property="modifyTime" />
+        <result column="modify_by" property="modifyBy" />
+        <result column="row_version" property="rowVersion" />
+        <result column="row_valid" property="rowValid" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="baseColumnList">
+        id, ticket_id, ticket_hash, session_id, binding_operation_id, vin, account_id, relation_id,
+        state, issued_at, expires_at, consumed_at, consumed_by, issue_seq,
+        description, create_time, create_by, modify_time, modify_by, row_version, row_valid
+    </sql>
+
+    <!-- 新增（只落摘要，不落原值） -->
+    <insert id="insertPo" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO tb_activation_login_ticket (
+            ticket_id, ticket_hash, session_id, binding_operation_id, vin, account_id, relation_id,
+            state, issued_at, expires_at, issue_seq, row_version, row_valid
+        )
+        VALUES (
+            #{ticketId}, #{ticketHash}, #{sessionId}, #{bindingOperationId}, #{vin}, #{accountId}, #{relationId},
+            #{state}, #{issuedAt}, #{expiresAt}, #{issueSeq}, 1, 1
+        )
+    </insert>
+
+    <!-- 按摘要查询（唯一键） -->
+    <select id="selectByTicketHash" resultMap="baseResultMap">
+        SELECT <include refid="baseColumnList" />
+        FROM tb_activation_login_ticket
+        WHERE ticket_hash = #{ticketHash}
+          AND row_valid = 1
+        LIMIT 1
+    </select>
+
+    <!-- 会话最大签发序号（重签计数） -->
+    <select id="selectMaxIssueSeqBySession" resultType="int">
+        SELECT COALESCE(MAX(issue_seq), 0)
+        FROM tb_activation_login_ticket
+        WHERE session_id = #{sessionId}
+    </select>
+
+    <!-- 作废会话下全部未消费票据（重签替换 / 登录成功回执联动） -->
+    <update id="revokeIssuedBySession">
+        UPDATE tb_activation_login_ticket
+        SET state = 'REVOKED',
+            modify_time = #{now},
+            row_version = row_version + 1
+        WHERE session_id = #{sessionId}
+          AND state = 'ISSUED'
+          AND row_valid = 1
+    </update>
+
+    <!-- 原子消费：状态 + 未过期条件更新，影响行数为 0 即未消费成功 -->
+    <update id="consume">
+        UPDATE tb_activation_login_ticket
+        SET state = 'CONSUMED',
+            consumed_at = #{now},
+            consumed_by = #{consumedBy},
+            modify_time = #{now},
+            row_version = row_version + 1
+        WHERE ticket_hash = #{ticketHash}
+          AND state = 'ISSUED'
+          AND expires_at &gt; #{now}
+          AND row_valid = 1
+    </update>
+
+</mapper>

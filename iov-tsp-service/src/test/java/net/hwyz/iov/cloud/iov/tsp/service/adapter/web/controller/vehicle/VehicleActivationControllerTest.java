@@ -5,8 +5,10 @@ import net.hwyz.iov.cloud.framework.security.interceptor.HeaderInterceptor;
 import net.hwyz.iov.cloud.framework.web.context.SecurityContextHolder;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.AgreementType;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.CreateActivationSessionVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.response.LoginTicketVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ReportAckVo;
 import net.hwyz.iov.cloud.iov.tsp.service.adapter.web.support.TrustedCallerResolver;
+import net.hwyz.iov.cloud.iov.tsp.service.application.service.ActivationLoginTicketAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.ConsentAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.application.service.UserVehicleBindingAppService;
 import net.hwyz.iov.cloud.iov.tsp.service.common.exception.UserVehicleBindingErrorCode;
@@ -48,14 +50,17 @@ class VehicleActivationControllerTest {
 
     private UserVehicleBindingAppService bindingAppService;
     private ConsentAppService consentAppService;
+    private ActivationLoginTicketAppService loginTicketAppService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         bindingAppService = mock(UserVehicleBindingAppService.class);
         consentAppService = mock(ConsentAppService.class);
+        loginTicketAppService = mock(ActivationLoginTicketAppService.class);
         VehicleActivationController controller = new VehicleActivationController(bindingAppService,
-                consentAppService, new TrustedCallerResolver(new TspUserVehicleProperties()));
+                consentAppService, loginTicketAppService,
+                new TrustedCallerResolver(new TspUserVehicleProperties()));
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .addInterceptors(new HeaderInterceptor())
                 .build();
@@ -173,5 +178,33 @@ class VehicleActivationControllerTest {
                         .content("{\"reportId\":\"RPT-9\",\"items\":[{\"authorizationItem\":\"LOCATION\","
                                 + "\"state\":\"GRANTED\",\"version\":1}]}")))
                 .hasRootCauseInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("登录票据签发：车端上下文有效时返回票据原值与到期时刻")
+    void issueLoginTicketReturnsTicket() throws Exception {
+        Instant expiresAt = Instant.parse("2026-11-22T10:03:00Z");
+        when(loginTicketAppService.issue(eq(VIN), eq("SES-1"))).thenReturn(LoginTicketVo.builder()
+                .ticket("TICKET-VALUE").expiresAt(expiresAt).sessionId("SES-1").relationId("REL-1").build());
+
+        mockMvc.perform(post("/api/vehicle/activation/v1/session/SES-1/login-ticket")
+                        .header("X-Client-Type", "IVI")
+                        .header("X-Vin", VIN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ticket").value("TICKET-VALUE"))
+                .andExpect(jsonPath("$.data.sessionId").value("SES-1"))
+                .andExpect(jsonPath("$.data.relationId").value("REL-1"));
+
+        verify(loginTicketAppService).issue(VIN, "SES-1");
+    }
+
+    @Test
+    @DisplayName("登录票据签发：非车机客户端不可调用（防止手机端直接换票）")
+    void issueLoginTicketRejectsAppClient() {
+        assertThatThrownBy(() -> mockMvc.perform(post("/api/vehicle/activation/v1/session/SES-1/login-ticket")
+                        .header("X-Client-Type", "MOBILE")
+                        .header("X-Vin", VIN)))
+                .hasRootCauseInstanceOf(BusinessException.class);
+        verify(loginTicketAppService, org.mockito.Mockito.never()).issue(anyString(), anyString());
     }
 }

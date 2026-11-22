@@ -57,6 +57,47 @@ public class TspUserVehicleProperties {
     private ActivationFact activationFact = new ActivationFact();
 
     /**
+     * 一次性登录票据配置（IOV-TSP-DSN-CR-019 D019-02/D019-04）
+     */
+    private LoginTicket loginTicket = new LoginTicket();
+
+    /**
+     * 一次性登录票据配置
+     * <p>
+     * TTL 短时效 + 会话级签发次数/频率上限是最小泄露窗口与重放面的一部分，
+     * 阈值可按联调确认调整；enabled=false 仅停止签发（回滚开关），不清理已签发票据。
+     */
+    @Getter
+    @Setter
+    public static class LoginTicket {
+
+        /**
+         * 是否允许签发（false 为回滚开关；已签发未消费票据仍可消费至自然过期）
+         */
+        private boolean enabled = true;
+
+        /**
+         * 票据有效期（默认 180 秒）
+         */
+        private Duration ttl = Duration.ofSeconds(180);
+
+        /**
+         * 同一会话每分钟签发上限（<=0 表示不限制）
+         */
+        private int perSessionPerMinute = 3;
+
+        /**
+         * 同一会话累计签发次数上限（重签上限）
+         */
+        private int perSessionMaxIssue = 10;
+
+        /**
+         * 票据消费方标识（仅作为审计记录的消费方，不做调用方准入判定）
+         */
+        private String consumer = "sec-ciam";
+    }
+
+    /**
      * 首次激活候选事实投递配置
      */
     @Getter

@@ -26,6 +26,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -38,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -63,13 +67,19 @@ class ConsentAppServiceTest {
     private ActivationSessionRepository activationSessionRepository;
     @Mock
     private UserVehicleAuditRepository userVehicleAuditRepository;
+    @Mock
+    private ActivationLoginTicketAppService activationLoginTicketAppService;
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     private ConsentAppService consentAppService;
 
     @BeforeEach
     void setUp() {
+        lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         consentAppService = new ConsentAppService(consentRepository, privacyAuthorizationRepository,
-                activationSessionRepository, userVehicleAuditRepository, Clock.fixed(NOW, ZoneOffset.UTC));
+                activationSessionRepository, userVehicleAuditRepository, activationLoginTicketAppService,
+                new TransactionTemplate(transactionManager), Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     private List<AgreementAcceptanceRequest> agreements() {
@@ -130,6 +140,8 @@ class ConsentAppServiceTest {
         assertThat(ack.getAccepted()).isTrue();
         verify(consentRepository, org.mockito.Mockito.times(2)).insertAccountConsent(any(AccountAgreementConsent.class));
         verify(consentRepository, never()).insertVinConsent(any());
+        // D019-05：登录成功写入与未消费票据作废在同一事务（同一编排调用）
+        verify(activationLoginTicketAppService).revokeIssuedOnLoginSuccess(SESSION_ID, VIN, NOW);
     }
 
     @Test
@@ -168,6 +180,8 @@ class ConsentAppServiceTest {
 
         verify(consentRepository, never()).insertAccountConsent(any());
         verify(consentRepository, never()).insertVinConsent(any());
+        // 登录失败不解除绑定、不作废票据（失败后可重签，受会话级限流约束）
+        verify(activationLoginTicketAppService, never()).revokeIssuedOnLoginSuccess(anyString(), anyString(), any());
     }
 
     @Test
