@@ -45,6 +45,11 @@ tsp:
     activation-fact:
       publish-enabled: true
       topic: tsp.user-vehicle-activation-fact
+      # 终审修复 B-5：副本因子与 tbox-vagw-cmd 解耦，生产默认 2；
+      # 本地/单 Broker E2E 用环境变量置 1（TSP_ACTIVATION_FACT_REPLICATION_FACTOR=1），不得写死到代码。
+      replication-factor: ${TSP_ACTIVATION_FACT_REPLICATION_FACTOR:2}
+      # 最小同步副本数：建议 1（2 副本下容忍单节点故障）；约束 1 <= min-insync-replicas <= replication-factor
+      min-insync-replicas: ${TSP_ACTIVATION_FACT_MIN_INSYNC_REPLICAS:1}
       schema-version: 1
       batch-size: 50
       max-retry: 10
@@ -56,6 +61,27 @@ tsp:
       per-session-per-minute: 3
       per-session-max-issue: 10
       consumer: sec-ciam
+    # 隐私授权项目录与上报强校验（IOV-TSP-DSN-CR-020）：目录即权威（配置驱动，不落库、不使用 CMS）。
+    # 目录为空/版本为空/编码非法或重复/展示名为空 → 启动失败（fail-fast）。
+    # 注意：条目不再有 current-version；版本只在目录级 catalog-version 上承载，任何条目变更必须同步改此值。
+    # items 真实取值待产品/PRD 确认，以下为结构占位（编码与 G-1 契约样例同源）。
+    privacy-authorization:
+      enabled: true
+      enforce-catalog: true
+      catalog-version: v1
+      items:
+        - item: GPS_LOCATION
+          display-name: 位置信息
+          display-name-en: Location Information
+          required: false
+        - item: DRIVING_BEHAVIOR
+          display-name: 驾驶行为分析
+          display-name-en: Driving Behavior Analysis
+          required: false
+    # 车端会话创建幂等台账（IOV-TSP-DSN-CR-020，V19）：enabled=false 不读取 Idempotency-Key（回滚开关）
+    session-idempotency:
+      enabled: true
+      max-key-length: 128
   tbox-management:
     # TBOX 后台运营查询（MPT，TSP-DSN-CR-009）：仅影响异常标签派生与查询/导出边界
     activation-timeout: PT30M

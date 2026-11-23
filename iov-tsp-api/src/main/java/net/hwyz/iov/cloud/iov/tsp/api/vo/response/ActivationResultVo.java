@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.ActivationSessionState;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.IviLoginResultStatus;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.RelationSource;
 
 import java.time.Instant;
 
@@ -38,9 +39,15 @@ public class ActivationResultVo {
     private String bindingOperationId;
 
     /**
-     * 关系ID（已绑定时）
+     * 关系ID（已绑定时；不得当作跨时间稳定主键，来源见 relationSource）
      */
     private String relationId;
+
+    /**
+     * 关系ID来源（IOV-TSP-DSN-CR-020 D020-08 / R-6 纯新增字段）：
+     * BINDING_OPERATION 为本次绑定操作 resultRelationId；ACTIVE_RELATION 为回退的当前有效关系
+     */
+    private RelationSource relationSource;
 
     /**
      * 车辆 VIN

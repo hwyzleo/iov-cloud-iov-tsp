@@ -98,4 +98,16 @@ public interface ActivationSessionRepository {
      * @return 更新成功返回 true
      */
     boolean reportIviLoginResult(String sessionId, IviLoginResultStatus status, String reportId, Instant now);
+
+    /**
+     * 同会话重签二维码（IOV-TSP-DSN-CR-020 D020-05 幂等回放）：
+     * 只存新码不可逆摘要，旧码立即失效；会话必须仍为 ISSUED。
+     *
+     * @param sessionId       会话业务ID
+     * @param qrTokenHash     新二维码摘要
+     * @param now             当前时刻
+     * @param expectedVersion 期望版本
+     * @return 更新成功返回 true
+     */
+    boolean resignQrToken(String sessionId, String qrTokenHash, Instant now, int expectedVersion);
 }

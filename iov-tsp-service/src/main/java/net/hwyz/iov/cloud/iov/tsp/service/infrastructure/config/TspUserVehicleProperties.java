@@ -6,6 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 用户车辆关系模块配置（IOV-TSP-DSN-CR-017）。
@@ -62,6 +64,93 @@ public class TspUserVehicleProperties {
     private LoginTicket loginTicket = new LoginTicket();
 
     /**
+     * 隐私授权项目录与上报强校验（IOV-TSP-DSN-CR-020 D020-01/D020-03）
+     */
+    private PrivacyAuthorization privacyAuthorization = new PrivacyAuthorization();
+
+    /**
+     * 车端会话创建幂等台账（IOV-TSP-DSN-CR-020 D020-04/D020-05）
+     */
+    private SessionIdempotency sessionIdempotency = new SessionIdempotency();
+
+    /**
+     * 隐私授权项目录与强校验配置。
+     * <p>
+     * 目录是授权事实的唯一权威（不落库、不使用 CMS）：任何条目内容变更都必须同步变更
+     * {@code catalog-version}，否则旧版本上报将持续命中 401119（运维发布检查项）。
+     */
+    @Getter
+    @Setter
+    public static class PrivacyAuthorization {
+
+        /**
+         * 是否启用目录端点与上报强校验（false 仅用于回滚；目录本身仍必须合法）
+         */
+        private boolean enabled = true;
+
+        /**
+         * 是否强制校验目录（false 时上报只告警不拒绝，仅回滚用，生产不得长期开启）
+         */
+        private boolean enforceCatalog = true;
+
+        /**
+         * 目录版本（上报必须原样回传，否则 401119；目录任何变更都要改此值）
+         */
+        private String catalogVersion;
+
+        /**
+         * 目录条目（结构占位；真实取值待产品/PRD 确认）
+         */
+        private List<Item> items = new ArrayList<>();
+
+        /**
+         * 单个目录条目
+         */
+        @Getter
+        @Setter
+        public static class Item {
+
+            /**
+             * 授权项编码（^[A-Z][A-Z0-9_]{2,63}$，区分大小写）
+             */
+            private String item;
+
+            /**
+             * 默认语言（zh-CN）展示名
+             */
+            private String displayName;
+
+            /**
+             * 英文（en-US）展示名
+             */
+            private String displayNameEn;
+
+            /**
+             * 是否必选授权项
+             */
+            private boolean required;
+        }
+    }
+
+    /**
+     * 车端会话创建幂等台账配置
+     */
+    @Getter
+    @Setter
+    public static class SessionIdempotency {
+
+        /**
+         * 是否启用 Idempotency-Key 幂等（false 为回滚开关：不读取请求头，行为回到「每次新建」）
+         */
+        private boolean enabled = true;
+
+        /**
+         * 幂等键最大长度（与 V19 idempotency_key VARCHAR(128) 对齐）
+         */
+        private int maxKeyLength = 128;
+    }
+
+    /**
      * 一次性登录票据配置
      * <p>
      * TTL 短时效 + 会话级签发次数/频率上限是最小泄露窗口与重放面的一部分，
@@ -113,6 +202,21 @@ public class TspUserVehicleProperties {
          * 目标 Topic（TSP 生产、VMD 消费，需在 FW-KAFKA Topic 目录登记）
          */
         private String topic = "tsp.user-vehicle-activation-fact";
+
+        /**
+         * 目标 Topic 副本因子（终审修复 B-5）：默认 2（生产高可用），
+         * 与 {@code tbox-vagw-cmd} 的固定副本因子 1 <b>完全解耦</b>，互不影响。
+         * <p>
+         * 本地/单 Broker E2E 环境通过环境变量 {@code TSP_ACTIVATION_FACT_REPLICATION_FACTOR=1} 覆盖，
+         * 否则单 Broker 集群无法满足副本因子 2（Topic 创建失败 → 预留区准备重试/健康降级）。
+         */
+        private short replicationFactor = 2;
+
+        /**
+         * 目标 Topic 的最小同步副本数（建议 1：2 副本下允许单节点故障；
+         * 本地 E2E 副本因子置 1 时仍合法，约束为 1 <= min.insync.replicas <= replicationFactor）
+         */
+        private short minInsyncReplicas = 1;
 
         /**
          * 事件契约版本

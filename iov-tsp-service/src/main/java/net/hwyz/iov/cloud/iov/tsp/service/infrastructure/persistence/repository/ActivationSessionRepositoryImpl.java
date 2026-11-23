@@ -89,6 +89,12 @@ public class ActivationSessionRepositoryImpl implements ActivationSessionReposit
                 UtcTime.toLocalDateTime(now)) > 0;
     }
 
+    @Override
+    public boolean resignQrToken(String sessionId, String qrTokenHash, Instant now, int expectedVersion) {
+        return activationSessionMapper.resignQrToken(sessionId, qrTokenHash, UtcTime.toLocalDateTime(now),
+                expectedVersion) > 0;
+    }
+
     private ActivationSession toEntity(ActivationSessionPo po) {
         return ActivationSession.builder()
                 .id(po.getId())

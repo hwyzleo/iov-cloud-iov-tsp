@@ -21,6 +21,13 @@ import java.util.List;
  * <p>
  * VSO 只提供最小事实与核验状态，不提供资格结论；本适配把外部枚举归一化为
  * TSP 内部事实质量，并把技术失败与「无匹配」严格区分（技术失败不得当作资格不符）。
+ * <p>
+ * IOV-TSP-DSN-CR-020 D020-07（含 R1 并入）：MATCHED 但事实不唯一时不静默截断：
+ * <ul>
+ *   <li>事实多于一条 → AMBIGUOUS（不拼接多订单、不返回任何 orderNo）；</li>
+ *   <li>事实为空 → INSUFFICIENT（事实不完整，<b>不降级为资格不符</b>）；</li>
+ *   <li>两者在 {@code BindingEligibilityPolicy} 下均为 UNDETERMINED → 401107，不放行、不下结论。</li>
+ * </ul>
  *
  * @author hwyz_leo
  */
@@ -49,12 +56,24 @@ public class VsoOrderDeliveryFactsAdapter implements OrderDeliveryFactsPort {
             throw new DependencyUnavailableException("VSO 绑车事实响应缺失: vin=" + mask(vin));
         }
         DeliveryFactsQuality quality = mapQuality(response.getLookupStatus());
-        if (quality != DeliveryFactsQuality.MATCHED || response.getFacts() == null || response.getFacts().isEmpty()) {
+        if (quality != DeliveryFactsQuality.MATCHED) {
             // 非 MATCHED 也保留查询结论与原因码，便于审计与事后复核（不含 PII）
             return new DeliveryFacts(quality, false, List.of(), null,
                     buildLookupRef(response, quality), response.getCheckedAt());
         }
-        BindingFactsQueryResponse.Fact fact = response.getFacts().get(0);
+        List<BindingFactsQueryResponse.Fact> facts = response.getFacts();
+        if (facts == null || facts.isEmpty()) {
+            // D020-07 / R1 定稿：MATCHED 但事实为空 → INSUFFICIENT（事实不完整），不得判为不符
+            return new DeliveryFacts(DeliveryFactsQuality.INSUFFICIENT, false, List.of(), null,
+                    buildAmbiguityRef(DeliveryFactsQuality.INSUFFICIENT, 0, response), response.getCheckedAt());
+        }
+        if (facts.size() > 1) {
+            // 多条候选事实：不在服务端静默选单，归一为 AMBIGUOUS，不返回任何 orderNo
+            return new DeliveryFacts(DeliveryFactsQuality.AMBIGUOUS, false, List.of(), null,
+                    buildAmbiguityRef(DeliveryFactsQuality.AMBIGUOUS, facts.size(), response),
+                    response.getCheckedAt());
+        }
+        BindingFactsQueryResponse.Fact fact = facts.get(0);
         boolean delivered = fact.getDeliveryStatus() == BindingDeliveryStatus.DELIVERED;
         return new DeliveryFacts(quality, delivered,
                 fact.getMatchedRoles() == null ? List.of() : fact.getMatchedRoles(),
@@ -77,6 +96,24 @@ public class VsoOrderDeliveryFactsAdapter implements OrderDeliveryFactsPort {
     private String buildLookupRef(BindingFactsQueryResponse response, DeliveryFactsQuality quality) {
         String reasonCode = response.getReasonCode() == null ? "-" : response.getReasonCode().toString();
         return "lookup=" + quality.name() + ";reason=" + reasonCode;
+    }
+
+    /**
+     * MATCHED 但事实不唯一的引用摘要（D020-07 定稿文案）：
+     * 只含核验状态、候选数量与 VSO reasonCode，不含 orderNo / PII
+     *
+     * @param quality  归一后的质量（AMBIGUOUS / INSUFFICIENT）
+     * @param count    候选事实数量
+     * @param response VSO 响应
+     * @return 引用摘要
+     */
+    private String buildAmbiguityRef(DeliveryFactsQuality quality, int count, BindingFactsQueryResponse response) {
+        String reasonCode = response.getReasonCode() == null ? "-" : response.getReasonCode().toString();
+        if (count <= 0) {
+            // 空事实分支：lookup 保留 MATCHED + facts=0（不让下游把“无事实”读成“无匹配”）
+            return "schemaVersion=1;lookup=MATCHED;facts=0;reason=" + reasonCode;
+        }
+        return "schemaVersion=1;lookup=" + quality.name() + ";count=" + count + ";reason=" + reasonCode;
     }
 
     /**

@@ -25,7 +25,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
- * VSO 绑车事实防腐层契约对齐测试（OTD-VSO-DSN-CR-017 / IOV-TSP-DSN-CR-017）。
+ * VSO 绑车事实防腐层契约对齐测试（OTD-VSO-DSN-CR-017 / IOV-TSP-DSN-CR-017、IOV-TSP-DSN-CR-020 TC020-05）。
  */
 @ExtendWith(MockitoExtension.class)
 class VsoOrderDeliveryFactsAdapterTest {
@@ -87,6 +87,48 @@ class VsoOrderDeliveryFactsAdapterTest {
             assertThat(facts.quality().name()).isEqualTo(status.name());
             assertThat(facts.delivered()).isFalse();
         }
+    }
+
+    @Test
+    @DisplayName("MATCHED + 多条事实：归一为 AMBIGUOUS，不静默选单且不返回 orderNo")
+    void matchedMultipleFactsIsAmbiguous() {
+        when(vsoOrderService.queryBindingFacts(any())).thenReturn(BindingFactsQueryResponse.builder()
+                .schemaVersion(1).checkedAt(CHECKED_AT).lookupStatus(BindingLookupStatus.MATCHED)
+                .facts(List.of(fact("ORDER-1", BindingDeliveryStatus.DELIVERED),
+                        fact("ORDER-2", BindingDeliveryStatus.DELIVERED),
+                        fact("ORDER-3", BindingDeliveryStatus.NOT_DELIVERED)))
+                .build());
+
+        DeliveryFacts facts = adapter.load("account-1", "LSVAA1234567890AB");
+
+        assertThat(facts.quality()).isEqualTo(DeliveryFactsQuality.AMBIGUOUS);
+        assertThat(facts.delivered()).isFalse();
+        assertThat(facts.orderNo()).isNull();
+        assertThat(facts.matchedRoles()).isEmpty();
+        assertThat(facts.factRef()).contains("lookup=AMBIGUOUS").contains("count=3")
+                .doesNotContain("ORDER-");
+    }
+
+    @Test
+    @DisplayName("MATCHED + 空事实：归一为 INSUFFICIENT（不降级为资格不符）")
+    void matchedEmptyFactsIsInsufficient() {
+        when(vsoOrderService.queryBindingFacts(any())).thenReturn(BindingFactsQueryResponse.builder()
+                .schemaVersion(1).checkedAt(CHECKED_AT).lookupStatus(BindingLookupStatus.MATCHED)
+                .facts(List.of()).build());
+
+        DeliveryFacts facts = adapter.load("account-1", "LSVAA1234567890AB");
+
+        assertThat(facts.quality()).isEqualTo(DeliveryFactsQuality.INSUFFICIENT);
+        assertThat(facts.delivered()).isFalse();
+        assertThat(facts.orderNo()).isNull();
+        assertThat(facts.factRef()).contains("lookup=MATCHED").contains("facts=0");
+    }
+
+    private BindingFactsQueryResponse.Fact fact(String orderNo, BindingDeliveryStatus status) {
+        return BindingFactsQueryResponse.Fact.builder()
+                .orderId("OID-" + orderNo).orderNo(orderNo).orderState(650)
+                .vin("LSVAA1234567890AB").matchedRoles(List.of("order_user"))
+                .deliveryStatus(status).build();
     }
 
     @Test

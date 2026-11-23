@@ -9,6 +9,7 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingCallerScope;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingEligibility;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingOperationStatus;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingResultReason;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.RelationSource;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.UserVehicleRelationStatus;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.request.AgreementAcceptanceRequest;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.request.ConfirmVehicleBindingRequest;
@@ -19,9 +20,11 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.response.CreateActivationSessionVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ScanActivationSessionVo;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.UserVehicleRelationResult;
 import net.hwyz.iov.cloud.iov.tsp.service.common.exception.UserVehicleBindingErrorCode;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.ActivationPayloadDigest;
 import net.hwyz.iov.cloud.iov.tsp.service.common.util.DigestUtils;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationFact;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationSession;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationSessionIdempotency;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementBundle;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementContent;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.BindingOperation;
@@ -35,6 +38,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.port.DependencyUnavailableExcep
 import net.hwyz.iov.cloud.iov.tsp.service.domain.port.OrderDeliveryFactsPort;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.port.VehicleFactsPort;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationFactRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationSessionIdempotencyRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationSessionRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.BindingOperationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleAuditRepository;
@@ -50,10 +54,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 用户车辆绑定应用服务（IOV-TSP-DSN-CR-017 D017-02/D017-03/D017-04/D017-05、IOV-TSP-DSN-CR-018 D018-02）。
@@ -61,6 +67,14 @@ import java.util.Set;
  * 编排一次性会话、车辆/交付事实读取、资格决策、原子绑定与结果恢复；
  * 外部 RPC 一律在数据库事务与行锁之外执行，事务内按固定顺序锁定会话与幂等操作，
  * 数据库唯一键作为并发最终防线。
+ * <p>
+ * IOV-TSP-DSN-CR-020：
+ * <ul>
+ *   <li>D020-04/D020-05：车端会话创建支持专用 {@code Idempotency-Key} + V19 台账，
+ *       同键同体回放（sessionId/expiresAt 复用 + 同会话重签新码，旧码立即失效），
+ *       同键异体 401110，不读取 {@code X-Idempotency-Key}、不使用框架内存幂等过滤器；</li>
+ *   <li>D020-08：结果查询 relationId 优先取绑定操作 resultRelationId，并新增 relationSource。</li>
+ * </ul>
  *
  * @author hwyz_leo
  */
@@ -71,10 +85,18 @@ public class UserVehicleBindingAppService {
 
     private static final int QR_TOKEN_BYTES = 32;
 
+    /**
+     * Idempotency-Key 字符集与长度（存在但非法 → 401112）
+     */
+    private static final Pattern IDEMPOTENCY_KEY_PATTERN = Pattern.compile("^[A-Za-z0-9_.:-]{1,128}$");
+
+    private static final String SESSION_DIGEST_PREFIX = "VEHICLE_SESSION";
+
     private final AgreementContentPort agreementContentPort;
     private final VehicleFactsPort vehicleFactsPort;
     private final OrderDeliveryFactsPort orderDeliveryFactsPort;
     private final ActivationSessionRepository activationSessionRepository;
+    private final ActivationSessionIdempotencyRepository activationSessionIdempotencyRepository;
     private final UserVehicleRelationRepository userVehicleRelationRepository;
     private final BindingOperationRepository bindingOperationRepository;
     private final ActivationFactRepository activationFactRepository;
@@ -97,18 +119,39 @@ public class UserVehicleBindingAppService {
     }
 
     /**
-     * 车端签发一次性二维码会话
+     * 车端签发一次性二维码会话（支持 Idempotency-Key 幂等回放，IOV-TSP-DSN-CR-020 D020-05）。
+     * <p>
+     * 回放语义（§13 裁决 B 定稿，唯一分支）：同 VIN + 同键 + 同内容不新建会话、不产生二维码孤儿；
+     * {@code sessionId}/{@code expiresAt} 复用原值；{@code qrToken} 为同一会话<b>重签的新码</b>
+     * （只存新码摘要），旧二维码立即失效；同键异体 → 401110；台账过期视为释放后按新建处理。
      *
      * @param trustedVehicleRef 可信车端引用
      * @param vin               可信车端上下文 VIN
      * @param agreements        两项协议明确同意证据
+     * @param idempotencyKey    幂等键（请求头 Idempotency-Key；缺失则逐次新建）
      * @return 会话与二维码凭据
      */
     public CreateActivationSessionVo createSession(String trustedVehicleRef, String vin,
-                                                   List<AgreementAcceptanceRequest> agreements) {
+                                                   List<AgreementAcceptanceRequest> agreements,
+                                                   String idempotencyKey) {
         AgreementBundle bundle = loadAgreements(properties.getDefaultLanguage());
         String revisions = validateAcceptances(agreements, bundle);
         Instant now = clock.instant();
+        String key = normalizeIdempotencyKey(idempotencyKey);
+        String requestDigest = sessionRequestDigest(vin, agreements);
+        if (key != null) {
+            Optional<ActivationSessionIdempotency> existing = activationSessionIdempotencyRepository
+                    .find(BindingCallerScope.VEHICLE, vin, key);
+            if (existing.isPresent()) {
+                ActivationSessionIdempotency record = existing.get();
+                if (record.retainedAt(now)) {
+                    return replaySession(record, requestDigest, vin, now);
+                }
+                // expires_at <= now：幂等已释放，删除后按新建处理（正确性不依赖清理任务）
+                activationSessionIdempotencyRepository.deleteById(record.getId());
+            }
+        }
+
         Instant expiresAt = now.plus(properties.getSessionTtl());
         String qrToken = newQrToken();
         ActivationSession session = ActivationSession.builder()
@@ -120,14 +163,40 @@ public class UserVehicleBindingAppService {
                 .expiresAt(expiresAt)
                 .state(ActivationSessionState.ISSUED)
                 .build();
-        activationSessionRepository.insert(session);
-        audit("SESSION", session.getSessionId(), vin, null, null, ActivationSessionState.ISSUED.name(),
-                "VEHICLE", null, revisions, now);
-        log.info("签发激活会话: sessionId={}, vin={}, expiresAt={}", session.getSessionId(), maskVin(vin), expiresAt);
+        if (key == null) {
+            createSessionOnly(session, revisions, now);
+        } else {
+            try {
+                // session 与台账同事务：避免“会话已建而台账未落”导致下次重试又建会话
+                transactionTemplate.executeWithoutResult(status -> {
+                    createSessionOnly(session, revisions, now);
+                    activationSessionIdempotencyRepository.insert(ActivationSessionIdempotency.builder()
+                            .idempotencyId(newId("ASI"))
+                            .callerScope(BindingCallerScope.VEHICLE)
+                            .vin(vin)
+                            .idempotencyKey(key)
+                            .requestDigest(requestDigest)
+                            .sessionId(session.getSessionId())
+                            .expiresAt(session.getExpiresAt())
+                            .build());
+                });
+            } catch (DuplicateKeyException e) {
+                // 并发同键：重新按台账判定（回放/冲突），不重复建会话
+                ActivationSessionIdempotency concurrent = activationSessionIdempotencyRepository
+                        .find(BindingCallerScope.VEHICLE, vin, key)
+                        .orElseThrow(() -> business(UserVehicleBindingErrorCode.IDEMPOTENCY_CONFLICT));
+                if (!concurrent.retainedAt(now)) {
+                    throw business(UserVehicleBindingErrorCode.IDEMPOTENCY_CONFLICT);
+                }
+                return replaySession(concurrent, requestDigest, vin, now);
+            }
+        }
+        log.info("签发激活会话: sessionId={}, vin={}, expiresAt={}, idempotent={}", session.getSessionId(),
+                maskVin(vin), session.getExpiresAt(), key != null);
         return CreateActivationSessionVo.builder()
                 .sessionId(session.getSessionId())
                 .qrToken(qrToken)
-                .expiresAt(expiresAt)
+                .expiresAt(session.getExpiresAt())
                 .build();
     }
 
@@ -340,13 +409,28 @@ public class UserVehicleBindingAppService {
         if (session.getResultExpiresAt() != null && now.isAfter(session.getResultExpiresAt())) {
             throw business(UserVehicleBindingErrorCode.SESSION_EXPIRED);
         }
-        String relationId = userVehicleRelationRepository.findActiveByVin(vin)
-                .map(UserVehicleRelation::getRelationId).orElse(null);
+        // D020-08：relationId 优先取本次绑定操作的结果关系（关系后续 RELEASED 后历史会话仍返回真实结果），
+        // 仅在操作缺失/未成功时回退当前有效关系；R-6：纯新增 relationSource 供车端区分口径
+        String relationId = null;
+        RelationSource relationSource = RelationSource.ACTIVE_RELATION;
+        if (session.getBindingOperationId() != null) {
+            relationId = bindingOperationRepository.findByOperationId(session.getBindingOperationId())
+                    .map(BindingOperation::getResultRelationId).orElse(null);
+            if (relationId != null) {
+                relationSource = RelationSource.BINDING_OPERATION;
+            }
+        }
+        if (relationId == null) {
+            relationId = userVehicleRelationRepository.findActiveByVin(vin)
+                    .map(UserVehicleRelation::getRelationId).orElse(null);
+            relationSource = RelationSource.ACTIVE_RELATION;
+        }
         return ActivationResultVo.builder()
                 .sessionId(session.getSessionId())
                 .state(session.getState())
                 .bindingOperationId(session.getBindingOperationId())
                 .relationId(relationId)
+                .relationSource(relationSource)
                 .vin(vin)
                 .iviLoginState(session.getIviLoginState())
                 .resultExpiresAt(session.getResultExpiresAt())
@@ -354,6 +438,118 @@ public class UserVehicleBindingAppService {
     }
 
     // ================= 内部实现 =================
+
+    /**
+     * 新会话 + 首条审计（新建路径与幂等回放均复用）
+     *
+     * @param session   会话
+     * @param revisions 协议修订证据
+     * @param now       当前时刻
+     */
+    private void createSessionOnly(ActivationSession session, String revisions, Instant now) {
+        activationSessionRepository.insert(session);
+        audit("SESSION", session.getSessionId(), session.getVin(), null, null,
+                ActivationSessionState.ISSUED.name(), "VEHICLE", null, revisions, now);
+    }
+
+    /**
+     * 幂等回放（D020-05 第 3 步，唯一分支）：
+     * sessionId/expiresAt 复用原值 + 同会话重签新码（旧码立即失效）；会话已非 ISSUED → 401101
+     *
+     * @param record        台账记录
+     * @param requestDigest 本次请求摘要
+     * @param vin           可信车端上下文 VIN
+     * @param now           当前时刻
+     * @return 回放结果（qrToken 为新签发的码）
+     */
+    private CreateActivationSessionVo replaySession(ActivationSessionIdempotency record, String requestDigest,
+                                                   String vin, Instant now) {
+        if (!requestDigest.equals(record.getRequestDigest())) {
+            // 同键异体：复用既有码（401110）
+            throw business(UserVehicleBindingErrorCode.IDEMPOTENCY_CONFLICT);
+        }
+        ActivationSession session = activationSessionRepository.findBySessionId(record.getSessionId())
+                .orElseThrow(() -> business(UserVehicleBindingErrorCode.SESSION_INVALID));
+        if (session.getState() != ActivationSessionState.ISSUED || session.isExpired(now)) {
+            // 已 SCANNED/BOUND/CANCELLED/SKIPPED/过期：不回放、不重签
+            throw business(UserVehicleBindingErrorCode.SESSION_INVALID);
+        }
+        String qrToken = newQrToken();
+        String qrTokenHash = DigestUtils.sha256Hex(qrToken);
+        int expectedVersion = session.getRowVersion() == null ? 1 : session.getRowVersion();
+        Boolean resigned = transactionTemplate.execute(status -> {
+            if (!activationSessionRepository.resignQrToken(session.getSessionId(), qrTokenHash, now,
+                    expectedVersion)) {
+                return false;
+            }
+            audit("SESSION", session.getSessionId(), vin, null, ActivationSessionState.ISSUED.name(),
+                    ActivationSessionState.ISSUED.name(), "VEHICLE", "IDEMPOTENT_REPLAY",
+                    session.getAgreementRevisions(), now);
+            return true;
+        });
+        if (!Boolean.TRUE.equals(resigned)) {
+            throw business(UserVehicleBindingErrorCode.SESSION_INVALID);
+        }
+        log.info("激活会话幂等回放: sessionId={}, vin={}, expiresAt={}", session.getSessionId(), maskVin(vin),
+                session.getExpiresAt());
+        return CreateActivationSessionVo.builder()
+                .sessionId(session.getSessionId())
+                .qrToken(qrToken)
+                .expiresAt(session.getExpiresAt())
+                .build();
+    }
+
+    /**
+     * 规范化并校验 Idempotency-Key（存在但非法 → 401112；缺失返回 null 走现行逻辑）
+     *
+     * @param idempotencyKey 原始请求头
+     * @return 规范化幂等键或 null
+     */
+    private String normalizeIdempotencyKey(String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return null;
+        }
+        String key = idempotencyKey.trim();
+        if (!properties.getSessionIdempotency().isEnabled()) {
+            // 回滚开关：不启用幂等，行为回到「每次新建」
+            return null;
+        }
+        if (key.length() > properties.getSessionIdempotency().getMaxKeyLength()
+                || !IDEMPOTENCY_KEY_PATTERN.matcher(key).matches()) {
+            throw business(UserVehicleBindingErrorCode.INVALID_REQUEST);
+        }
+        return key;
+    }
+
+    /**
+     * 会话创建请求摘要（§14 裁决 R-4 定稿字段集）：
+     * {@code sha256("VEHICLE_SESSION|" + vin + "|" + sorted(agreementType:revisionId:agreed:language:contentHash))}
+     * <p>
+     * 每条协议取五元组，按 agreementType 升序排序后以 {@code ;} 连接；
+     * {@code agreed/language/contentHash} 缺失以空串占位（保证同构可比）；不含服务端生成的 expiresAt/qrToken。
+     *
+     * @param vin        车辆 VIN
+     * @param agreements 协议同意证据
+     * @return 不可逆摘要
+     */
+    private String sessionRequestDigest(String vin, List<AgreementAcceptanceRequest> agreements) {
+        List<String> parts = new ArrayList<>();
+        if (agreements != null) {
+            for (AgreementAcceptanceRequest acceptance : agreements) {
+                if (acceptance == null) {
+                    continue;
+                }
+                parts.add(String.join(":",
+                        acceptance.getAgreementType() == null ? "" : acceptance.getAgreementType().name(),
+                        acceptance.getRevisionId() == null ? "" : acceptance.getRevisionId(),
+                        acceptance.getAgreed() == null ? "" : String.valueOf(acceptance.getAgreed()),
+                        acceptance.getLanguage() == null ? "" : acceptance.getLanguage(),
+                        acceptance.getContentHash() == null ? "" : acceptance.getContentHash()));
+            }
+        }
+        Collections.sort(parts);
+        return DigestUtils.sha256Hex(SESSION_DIGEST_PREFIX + "|" + vin + "|" + String.join(";", parts));
+    }
 
     private AgreementBundle loadAgreements(String language) {
         try {
@@ -564,8 +760,10 @@ public class UserVehicleBindingAppService {
                 .bindingOperationId(operation.getOperationId())
                 .sourceFactRef(facts.factRef())
                 .occurredAt(now)
-                .payloadDigest(DigestUtils.sha256Hex(String.join("|", eventId, operation.getVin(),
-                        operation.getOperationId())))
+                // R-10 定稿口径（终审修复 B-4）：sha256(vin|bindingOperationId|sourceFactRef|occurredAt)，
+                // 与 eventId 无关；旧口径 sha256(eventId|vin|bindingOperationId) 已废弃
+                .payloadDigest(ActivationPayloadDigest.compute(operation.getVin(), operation.getOperationId(),
+                        facts.factRef(), now))
                 .publishStatus("PENDING")
                 .build();
         activationFactRepository.insert(fact);

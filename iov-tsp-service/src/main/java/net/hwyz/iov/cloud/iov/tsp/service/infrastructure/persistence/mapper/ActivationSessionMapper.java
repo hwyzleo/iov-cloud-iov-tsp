@@ -114,11 +114,27 @@ public interface ActivationSessionMapper {
                     @Param("expectedVersion") int expectedVersion);
 
     /**
-     * 记录车机登录结果（仅已绑定会话；登录失败不改变关系）
+     * 记录车机登录结果（仅已绑定会话；登录失败不改变关系）。
+     * <p>
+     * R-1 终态保护（IOV-TSP-DSN-CR-020 D020-06）：会话已 SUCCEEDED 时迟到的 FAILED
+     * 不得回退状态、不得重开票据签发窗口；影响行数 = 0 由应用层视为已终态。
      */
     @Update("UPDATE tb_activation_session SET ivi_login_state = #{status}, ivi_login_report_id = #{reportId}, "
             + "ivi_login_reported_at = #{now}, modify_time = #{now}, row_version = row_version + 1 "
-            + "WHERE session_id = #{sessionId} AND state = 'BOUND' AND row_valid = 1")
+            + "WHERE session_id = #{sessionId} AND state = 'BOUND' AND row_valid = 1 "
+            + "AND (ivi_login_state IS NULL OR ivi_login_state <> 'SUCCEEDED')")
     int reportIviLoginResult(@Param("sessionId") String sessionId, @Param("status") String status,
                              @Param("reportId") String reportId, @Param("now") LocalDateTime now);
+
+    /**
+     * 同会话重签二维码（IOV-TSP-DSN-CR-020 D020-05 幂等回放）
+     * <p>
+     * 只存新码不可逆摘要，旧码立即失效；仅 ISSUED 状态且版本匹配时可更新。
+     */
+    @Update("UPDATE tb_activation_session SET qr_token_hash = #{qrTokenHash}, modify_time = #{now}, "
+            + "row_version = row_version + 1 "
+            + "WHERE session_id = #{sessionId} AND state = 'ISSUED' AND row_version = #{expectedVersion} "
+            + "AND row_valid = 1 AND expires_at >= #{now}")
+    int resignQrToken(@Param("sessionId") String sessionId, @Param("qrTokenHash") String qrTokenHash,
+                      @Param("now") LocalDateTime now, @Param("expectedVersion") int expectedVersion);
 }

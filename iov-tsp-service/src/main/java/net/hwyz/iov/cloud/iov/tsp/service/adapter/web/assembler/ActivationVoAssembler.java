@@ -3,10 +3,14 @@ package net.hwyz.iov.cloud.iov.tsp.service.adapter.web.assembler;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.AgreementType;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ActivationAgreementVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ActivationAgreementsVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.response.PrivacyAuthorizationItemVo;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.response.PrivacyAuthorizationItemsVo;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.UserVehicleRelationVo;
 import net.hwyz.iov.cloud.iov.tsp.service.application.dto.result.UserVehicleRelationResult;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementBundle;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementContent;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.PrivacyAuthorizationCatalog;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.PrivacyAuthorizationItem;
 
 import java.util.List;
 
@@ -55,6 +59,38 @@ public final class ActivationVoAssembler {
                 .relationId(result.getRelationId())
                 .role(result.getRole())
                 .boundAt(result.getBoundAt())
+                .build();
+    }
+
+    /**
+     * 隐私授权项目录 → VO（IOV-TSP-DSN-CR-020 D020-02）
+     * <p>
+     * 字段集固定 {@code catalogVersion + items[{authorizationItem, displayName, required}]}，
+     * <b>不含 currentVersion</b>；displayName 按 Accept-Language 选择（缺省/不支持语言回落 zh-CN）。
+     *
+     * @param catalog       服务端权威目录
+     * @param acceptLanguage Accept-Language 头原始值（可空）
+     * @return 目录 VO
+     */
+    public static PrivacyAuthorizationItemsVo toPrivacyAuthorizationItemsVo(PrivacyAuthorizationCatalog catalog,
+                                                                            String acceptLanguage) {
+        if (catalog == null) {
+            return null;
+        }
+        PrivacyAuthorizationCatalog localized = catalog.localizedTo(acceptLanguage);
+        List<PrivacyAuthorizationItemVo> items = localized.items() == null ? List.of()
+                : localized.items().stream().map(ActivationVoAssembler::toPrivacyAuthorizationItemVo).toList();
+        return PrivacyAuthorizationItemsVo.builder()
+                .catalogVersion(localized.catalogVersion())
+                .items(items)
+                .build();
+    }
+
+    private static PrivacyAuthorizationItemVo toPrivacyAuthorizationItemVo(PrivacyAuthorizationItem item) {
+        return PrivacyAuthorizationItemVo.builder()
+                .authorizationItem(item.authorizationItem())
+                .displayName(item.displayName())
+                .required(item.required())
                 .build();
     }
 

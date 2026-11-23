@@ -5,12 +5,16 @@ import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.ActivationSessionState;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingCallerScope;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingOperationStatus;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.BindingResultReason;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.RelationSource;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.UserVehicleRelationStatus;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.request.ConfirmVehicleBindingRequest;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.response.ConfirmVehicleBindingVo;
 import net.hwyz.iov.cloud.iov.tsp.service.common.exception.UserVehicleBindingErrorCode;
+import net.hwyz.iov.cloud.iov.tsp.service.common.util.ActivationPayloadDigest;
 import net.hwyz.iov.cloud.iov.tsp.service.common.util.DigestUtils;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationFact;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationSession;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationSessionIdempotency;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.BindingOperation;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.DeliveryFacts;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.DeliveryFactsQuality;
@@ -21,6 +25,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.port.DependencyUnavailableExcep
 import net.hwyz.iov.cloud.iov.tsp.service.domain.port.OrderDeliveryFactsPort;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.port.VehicleFactsPort;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationFactRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationSessionIdempotencyRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationSessionRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.BindingOperationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleAuditRepository;
@@ -88,6 +93,8 @@ class UserVehicleBindingAppServiceTest {
     @Mock
     private ActivationSessionRepository activationSessionRepository;
     @Mock
+    private ActivationSessionIdempotencyRepository activationSessionIdempotencyRepository;
+    @Mock
     private UserVehicleRelationRepository userVehicleRelationRepository;
     @Mock
     private BindingOperationRepository bindingOperationRepository;
@@ -106,9 +113,10 @@ class UserVehicleBindingAppServiceTest {
         TspUserVehicleProperties properties = new TspUserVehicleProperties();
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         appService = new UserVehicleBindingAppService(agreementContentPort, vehicleFactsPort, orderDeliveryFactsPort,
-                activationSessionRepository, userVehicleRelationRepository, bindingOperationRepository,
-                activationFactRepository, userVehicleAuditRepository, new BindingEligibilityPolicy(), properties,
-                new TransactionTemplate(transactionManager), Clock.fixed(NOW, ZoneOffset.UTC));
+                activationSessionRepository, activationSessionIdempotencyRepository, userVehicleRelationRepository,
+                bindingOperationRepository, activationFactRepository, userVehicleAuditRepository,
+                new BindingEligibilityPolicy(), properties, new TransactionTemplate(transactionManager),
+                Clock.fixed(NOW, ZoneOffset.UTC));
         lenient().doAnswer(invocation -> {
             BindingOperation operation = invocation.getArgument(0);
             operation.setId(1L);
@@ -161,6 +169,36 @@ class UserVehicleBindingAppServiceTest {
         assertThat(result.getVin()).isEqualTo(VIN);
         verify(userVehicleRelationRepository).insert(any(UserVehicleRelation.class));
         verify(activationFactRepository).insert(any());
+    }
+
+    @Test
+    @DisplayName("首次激活候选事实摘要口径 = R-10：sha256(vin|bindingOperationId|sourceFactRef|occurredAt)，不含 eventId")
+    void activationFactDigestUsesR10Definition() {
+        when(bindingOperationRepository.findByIdempotencyKey(any(), anyString(), anyString()))
+                .thenReturn(Optional.empty());
+        when(activationSessionRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(scannedSession()));
+        when(activationSessionRepository.lockBySessionId(SESSION_ID)).thenReturn(Optional.of(scannedSession()));
+        when(vehicleFactsPort.load(VIN)).thenReturn(VehicleFacts.present(VIN));
+        when(orderDeliveryFactsPort.load(ACCOUNT, VIN)).thenReturn(deliveredFacts());
+        when(userVehicleRelationRepository.findActiveByVin(VIN)).thenReturn(Optional.empty());
+        when(activationSessionRepository.markBound(eq(SESSION_ID), anyString(), any(), any(), eq(1))).thenReturn(true);
+        when(bindingOperationRepository.markSucceeded(anyString(), anyString(), anyString(), any(), any(),
+                anyInt())).thenReturn(true);
+        when(activationFactRepository.findByBusinessKey(anyString(), anyString())).thenReturn(Optional.empty());
+
+        appService.confirm(ACCOUNT, request());
+
+        org.mockito.ArgumentCaptor<ActivationFact> captor = org.mockito.ArgumentCaptor.forClass(ActivationFact.class);
+        verify(activationFactRepository).insert(captor.capture());
+        ActivationFact fact = captor.getValue();
+        String expected = ActivationPayloadDigest.compute(fact.getVin(), fact.getBindingOperationId(),
+                fact.getSourceFactRef(), fact.getOccurredAt());
+        assertThat(fact.getPayloadDigest()).isEqualTo(expected);
+        assertThat(fact.getSourceFactRef()).isEqualTo("order=ORDER-1");
+        // 旧口径 sha256(eventId|vin|bindingOperationId) 已废弃：不得再产出旧摘要
+        String legacy = DigestUtils.sha256Hex(
+                String.join("|", fact.getEventId(), fact.getVin(), fact.getBindingOperationId()));
+        assertThat(fact.getPayloadDigest()).isNotEqualTo(legacy);
     }
 
     @Test
@@ -404,7 +442,8 @@ class UserVehicleBindingAppServiceTest {
     void createSessionRejectsContentHashMismatch() {
         when(agreementContentPort.loadCurrent(anyString())).thenReturn(bundle());
 
-        assertThatThrownBy(() -> appService.createSession("device-ref", VIN, acceptances("sha256:tampered", "sha256:tampered")))
+        assertThatThrownBy(() -> appService.createSession("device-ref", VIN,
+                acceptances("sha256:tampered", "sha256:tampered"), null))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
                         .isEqualTo(UserVehicleBindingErrorCode.AGREEMENT_NOT_ACCEPTED.getCode()));
@@ -421,10 +460,179 @@ class UserVehicleBindingAppServiceTest {
             return null;
         }).when(activationSessionRepository).insert(any(ActivationSession.class));
 
-        var result = appService.createSession("device-ref", VIN, acceptances("sha256:p", "sha256:u"));
+        var result = appService.createSession("device-ref", VIN, acceptances("sha256:p", "sha256:u"), null);
 
         assertThat(result.getSessionId()).isNotBlank();
         assertThat(result.getQrToken()).isNotBlank();
         verify(activationSessionRepository).insert(any(ActivationSession.class));
+    }
+
+    // ================= 会话创建幂等台账（IOV-TSP-DSN-CR-020 D020-04/D020-05） =================
+
+    private ActivationSession issuedSession() {
+        return ActivationSession.builder()
+                .sessionId(SESSION_ID)
+                .vin(VIN)
+                .state(ActivationSessionState.ISSUED)
+                .expiresAt(NOW.plusSeconds(600))
+                .rowVersion(1)
+                .build();
+    }
+
+    @Test
+    @DisplayName("幂等回放：同键同体不新建会话，sessionId/expiresAt 复用且二维码重签（旧码失效）")
+    void createSessionIdempotentReplayResignsQrToken() {
+        when(agreementContentPort.loadCurrent(anyString())).thenReturn(bundle());
+        String digest = DigestUtils.sha256Hex("VEHICLE_SESSION|" + VIN + "|" + String.join(";", List.of(
+                "PRIVACY_POLICY:REV-P:true:zh-CN:sha256:p",
+                "USER_AGREEMENT:REV-U:true:zh-CN:sha256:u")));
+        ActivationSessionIdempotency record = ActivationSessionIdempotency.builder()
+                .id(9L).callerScope(BindingCallerScope.VEHICLE).vin(VIN).idempotencyKey(KEY)
+                .requestDigest(digest).sessionId(SESSION_ID).expiresAt(NOW.plusSeconds(600)).build();
+        when(activationSessionIdempotencyRepository.find(BindingCallerScope.VEHICLE, VIN, KEY))
+                .thenReturn(Optional.of(record));
+        when(activationSessionRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(issuedSession()));
+        when(activationSessionRepository.resignQrToken(eq(SESSION_ID), anyString(), eq(NOW), eq(1)))
+                .thenReturn(true);
+
+        var result = appService.createSession("device-ref", VIN, acceptances("sha256:p", "sha256:u"), KEY);
+
+        assertThat(result.getSessionId()).isEqualTo(SESSION_ID);
+        assertThat(result.getExpiresAt()).isEqualTo(NOW.plusSeconds(600));
+        assertThat(result.getQrToken()).isNotBlank();
+        // 不新建会话、不新建台账/二维码孤儿
+        verify(activationSessionRepository, never()).insert(any());
+        verify(activationSessionIdempotencyRepository, never()).insert(any());
+        verify(activationSessionRepository).resignQrToken(eq(SESSION_ID), anyString(), eq(NOW), eq(1));
+    }
+
+    @Test
+    @DisplayName("幂等同键异体：返回 401110，不新建会话")
+    void createSessionIdempotentConflict() {
+        when(agreementContentPort.loadCurrent(anyString())).thenReturn(bundle());
+        when(activationSessionIdempotencyRepository.find(BindingCallerScope.VEHICLE, VIN, KEY))
+                .thenReturn(Optional.of(ActivationSessionIdempotency.builder()
+                        .id(9L).callerScope(BindingCallerScope.VEHICLE).vin(VIN).idempotencyKey(KEY)
+                        .requestDigest("different-digest").sessionId(SESSION_ID)
+                        .expiresAt(NOW.plusSeconds(600)).build()));
+
+        assertThatThrownBy(() -> appService.createSession("device-ref", VIN,
+                acceptances("sha256:p", "sha256:u"), KEY))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
+                        .isEqualTo(UserVehicleBindingErrorCode.IDEMPOTENCY_CONFLICT.getCode()));
+        verify(activationSessionRepository, never()).insert(any());
+    }
+
+    @Test
+    @DisplayName("幂等台账过期：释放后按新建处理（同一幂等键可复用）")
+    void createSessionIdempotentExpiredReleased() {
+        when(agreementContentPort.loadCurrent(anyString())).thenReturn(bundle());
+        when(activationSessionIdempotencyRepository.find(BindingCallerScope.VEHICLE, VIN, KEY))
+                .thenReturn(Optional.of(ActivationSessionIdempotency.builder()
+                        .id(9L).callerScope(BindingCallerScope.VEHICLE).vin(VIN).idempotencyKey(KEY)
+                        .requestDigest("any").sessionId(SESSION_ID)
+                        .expiresAt(NOW.minusSeconds(1)).build()));
+
+        var result = appService.createSession("device-ref", VIN, acceptances("sha256:p", "sha256:u"), KEY);
+
+        assertThat(result.getSessionId()).isNotBlank();
+        verify(activationSessionIdempotencyRepository).deleteById(9L);
+        verify(activationSessionRepository).insert(any(ActivationSession.class));
+        verify(activationSessionIdempotencyRepository).insert(any(ActivationSessionIdempotency.class));
+    }
+
+    @Test
+    @DisplayName("幂等回放：会话已非 ISSUED（已扫码）→ 401101 且不重签")
+    void createSessionReplayRejectsNonIssuedSession() {
+        when(agreementContentPort.loadCurrent(anyString())).thenReturn(bundle());
+        String digest = DigestUtils.sha256Hex("VEHICLE_SESSION|" + VIN + "|" + String.join(";", List.of(
+                "PRIVACY_POLICY:REV-P:true:zh-CN:sha256:p",
+                "USER_AGREEMENT:REV-U:true:zh-CN:sha256:u")));
+        when(activationSessionIdempotencyRepository.find(BindingCallerScope.VEHICLE, VIN, KEY))
+                .thenReturn(Optional.of(ActivationSessionIdempotency.builder()
+                        .id(9L).callerScope(BindingCallerScope.VEHICLE).vin(VIN).idempotencyKey(KEY)
+                        .requestDigest(digest).sessionId(SESSION_ID)
+                        .expiresAt(NOW.plusSeconds(600)).build()));
+        ActivationSession scanned = issuedSession();
+        scanned.setState(ActivationSessionState.SCANNED);
+        when(activationSessionRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(scanned));
+
+        assertThatThrownBy(() -> appService.createSession("device-ref", VIN,
+                acceptances("sha256:p", "sha256:u"), KEY))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
+                        .isEqualTo(UserVehicleBindingErrorCode.SESSION_INVALID.getCode()));
+        verify(activationSessionRepository, never()).resignQrToken(anyString(), anyString(), any(), anyInt());
+    }
+
+    @Test
+    @DisplayName("幂等键格式非法：401112 且不查台账、不新建会话")
+    void createSessionRejectsInvalidIdempotencyKey() {
+        when(agreementContentPort.loadCurrent(anyString())).thenReturn(bundle());
+
+        assertThatThrownBy(() -> appService.createSession("device-ref", VIN,
+                acceptances("sha256:p", "sha256:u"), "bad key with space"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
+                        .isEqualTo(UserVehicleBindingErrorCode.INVALID_REQUEST.getCode()));
+        verify(activationSessionIdempotencyRepository, never()).find(any(), anyString(), anyString());
+        verify(activationSessionRepository, never()).insert(any());
+    }
+
+    // ================= 绑定结果口径（IOV-TSP-DSN-CR-020 D020-08 / R-6） =================
+
+    @Test
+    @DisplayName("结果查询：relationId 优先取绑定操作 resultRelationId，来源为 BINDING_OPERATION")
+    void queryVehicleResultPrefersBindingOperationRelation() {
+        ActivationSession bound = issuedSession();
+        bound.setState(ActivationSessionState.BOUND);
+        bound.setBindingOperationId("BOP-1");
+        bound.setResultExpiresAt(NOW.plusSeconds(1800));
+        when(activationSessionRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(bound));
+        when(bindingOperationRepository.findByOperationId("BOP-1")).thenReturn(Optional.of(
+                BindingOperation.builder().operationId("BOP-1").status(BindingOperationStatus.SUCCEEDED)
+                        .resultRelationId("REL-BOUND").build()));
+
+        var result = appService.queryVehicleResult(VIN, SESSION_ID);
+
+        assertThat(result.getRelationId()).isEqualTo("REL-BOUND");
+        assertThat(result.getRelationSource()).isEqualTo(RelationSource.BINDING_OPERATION);
+        verify(userVehicleRelationRepository, never()).findActiveByVin(anyString());
+    }
+
+    @Test
+    @DisplayName("结果查询：绑定操作缺失时回退当前有效关系，来源为 ACTIVE_RELATION")
+    void queryVehicleResultFallsBackToActiveRelation() {
+        ActivationSession bound = issuedSession();
+        bound.setState(ActivationSessionState.BOUND);
+        bound.setBindingOperationId("BOP-1");
+        bound.setResultExpiresAt(NOW.plusSeconds(1800));
+        when(activationSessionRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(bound));
+        when(bindingOperationRepository.findByOperationId("BOP-1")).thenReturn(Optional.empty());
+        when(userVehicleRelationRepository.findActiveByVin(VIN)).thenReturn(Optional.of(
+                UserVehicleRelation.builder().relationId("REL-ACTIVE").accountId(ACCOUNT).vin(VIN).build()));
+
+        var result = appService.queryVehicleResult(VIN, SESSION_ID);
+
+        assertThat(result.getRelationId()).isEqualTo("REL-ACTIVE");
+        assertThat(result.getRelationSource()).isEqualTo(RelationSource.ACTIVE_RELATION);
+    }
+
+    @Test
+    @DisplayName("结果查询：relationId 最终为空时来源固定为 ACTIVE_RELATION")
+    void queryVehicleResultEmptyRelationKeepsActiveSource() {
+        ActivationSession bound = issuedSession();
+        bound.setState(ActivationSessionState.BOUND);
+        bound.setBindingOperationId("BOP-1");
+        bound.setResultExpiresAt(NOW.plusSeconds(1800));
+        when(activationSessionRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(bound));
+        when(bindingOperationRepository.findByOperationId("BOP-1")).thenReturn(Optional.empty());
+        when(userVehicleRelationRepository.findActiveByVin(VIN)).thenReturn(Optional.empty());
+
+        var result = appService.queryVehicleResult(VIN, SESSION_ID);
+
+        assertThat(result.getRelationId()).isNull();
+        assertThat(result.getRelationSource()).isEqualTo(RelationSource.ACTIVE_RELATION);
     }
 }

@@ -84,7 +84,17 @@ public enum UserVehicleBindingErrorCode implements ErrorCode {
     /**
      * 授权回执版本早于已存版本
      */
-    AUTHORIZATION_VERSION_CONFLICT("401114", "授权回执版本早于已记录版本");
+    AUTHORIZATION_VERSION_CONFLICT("401114", "授权回执版本早于已记录版本"),
+
+    /**
+     * 授权项不在批准目录内（整批拒绝，无任何写入；IOV-TSP-DSN-CR-020 D020-03）
+     */
+    PRIVACY_ITEM_NOT_APPROVED("401118", "授权项未在批准目录内"),
+
+    /**
+     * 上报目录版本缺失或与当前目录版本不一致（整批拒绝，无任何写入；车端可重试：重新拉目录后重报）
+     */
+    CATALOG_VERSION_MISMATCH("401119", "目录版本不一致");
 
     private final String code;
     private final String message;
