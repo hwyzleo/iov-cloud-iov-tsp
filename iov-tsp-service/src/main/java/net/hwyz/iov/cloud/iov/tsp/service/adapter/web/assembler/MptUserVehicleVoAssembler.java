@@ -150,6 +150,7 @@ public interface MptUserVehicleVoAssembler {
                 .boundAt(toDisplay(result.getBoundAt(), zone))
                 .releasedAt(toDisplay(result.getReleasedAt(), zone))
                 .releaseReason(result.getReleaseReason())
+                .rowVersion(result.getRowVersion())
                 .build();
     }
 

@@ -35,7 +35,7 @@ class MptUserVehicleVoAssemblerTest {
                 .detailStatus(MptUserVehicleDetailStatus.COMPLETE)
                 .relation(MptUserVehicleRelationResult.RelationResult.builder()
                         .relationId("REL-1").accountId("account-01").role("PRIMARY_USER").state("ACTIVE")
-                        .boundAt(BOUND_AT).build())
+                        .boundAt(BOUND_AT).rowVersion(3).build())
                 .iviLogin(MptUserVehicleRelationResult.IviLoginResult.builder()
                         .state(IviLoginResultStatus.SUCCEEDED).reportedAt(BOUND_AT.plusSeconds(60)).build())
                 .firstActivation(MptUserVehicleRelationResult.FirstActivationResult.builder()
@@ -49,6 +49,7 @@ class MptUserVehicleVoAssemblerTest {
 
         assertThat(vo.getRelation().getMaskedAccountId()).isEqualTo("acc*****01");
         assertThat(vo.getRelation().getMaskedAccountId()).doesNotContain("account-01");
+        assertThat(vo.getRelation().getRowVersion()).isEqualTo(3);
         // UTC 02:00 → 上海 10:00，无偏移墙钟
         assertThat(vo.getRelation().getBoundAt()).isEqualTo(LocalDateTime.of(2026, 11, 25, 10, 0));
         assertThat(vo.getIviLogin().getReportedAt()).isEqualTo(LocalDateTime.of(2026, 11, 25, 10, 1));

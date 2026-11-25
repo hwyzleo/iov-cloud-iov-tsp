@@ -63,6 +63,11 @@ public class MptUserVehicleRelationResult {
         private Instant releasedAt;
 
         private String releaseReason;
+
+        /**
+         * 当前 ACTIVE 关系乐观版本；管理后台解绑时作为预期版本原样提交。
+         */
+        private Integer rowVersion;
     }
 
     /**

@@ -121,6 +121,7 @@ class MptUserVehicleQueryAppServiceTest {
         assertThat(result.getBindingStatus()).isEqualTo(UserVehicleBindingStatus.BOUND);
         assertThat(result.getDetailStatus()).isEqualTo(MptUserVehicleDetailStatus.COMPLETE);
         assertThat(result.getRelation().getRelationId()).isEqualTo(RELATION_ID);
+        assertThat(result.getRelation().getRowVersion()).isEqualTo(2);
         assertThat(result.getIviLogin().getState()).isEqualTo(IviLoginResultStatus.SUCCEEDED);
         assertThat(result.getFirstActivation().getState()).isEqualTo(FirstActivationState.NOT_RECORDED);
         assertThat(result.getLatestUnbind()).isNull();

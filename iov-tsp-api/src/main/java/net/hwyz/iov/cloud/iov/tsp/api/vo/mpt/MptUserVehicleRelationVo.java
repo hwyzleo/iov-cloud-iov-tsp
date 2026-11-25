@@ -94,6 +94,11 @@ public class MptUserVehicleRelationVo {
         private LocalDateTime releasedAt;
 
         private String releaseReason;
+
+        /**
+         * 当前 ACTIVE 关系乐观版本；仅用于管理后台解绑 CAS，不是账号或授权事实。
+         */
+        private Integer rowVersion;
     }
 
     /**

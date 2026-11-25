@@ -190,6 +190,7 @@ public class MptUserVehicleQueryAppService {
                 .boundAt(relation.getBoundAt())
                 .releasedAt(relation.getReleasedAt())
                 .releaseReason(relation.getReleaseReason())
+                .rowVersion(relation.getRowVersion())
                 .build();
     }
 

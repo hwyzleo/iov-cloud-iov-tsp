@@ -84,7 +84,7 @@ class MptUserVehicleControllerIntegrationTest {
                 .detailStatus(MptUserVehicleDetailStatus.COMPLETE)
                 .relation(MptUserVehicleRelationResult.RelationResult.builder()
                         .relationId("REL-1").accountId("account-01").role("PRIMARY_USER").state("ACTIVE")
-                        .boundAt(NOW).build())
+                        .boundAt(NOW).rowVersion(3).build())
                 .firstActivation(MptUserVehicleRelationResult.FirstActivationResult.builder()
                         .state(FirstActivationState.NOT_RECORDED).build())
                 .build();
@@ -111,6 +111,7 @@ class MptUserVehicleControllerIntegrationTest {
                 .andExpect(jsonPath("$.data.detailStatus").value("COMPLETE"))
                 .andExpect(jsonPath("$.data.relation.relationId").value("REL-1"))
                 .andExpect(jsonPath("$.data.relation.maskedAccountId").value("acc*****01"))
+                .andExpect(jsonPath("$.data.relation.rowVersion").value(3))
                 .andExpect(jsonPath("$.data.firstActivation.state").value("NOT_RECORDED"));
     }
 
