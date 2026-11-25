@@ -74,6 +74,52 @@ public class TspUserVehicleProperties {
     private SessionIdempotency sessionIdempotency = new SessionIdempotency();
 
     /**
+     * 人工解绑与 CIAM 凭证撤销补偿（IOV-TSP-DSN-CR-021 D021-07）
+     */
+    private Unbind unbind = new Unbind();
+
+    /**
+     * 人工解绑与凭证撤销配置。
+     * <p>
+     * CIAM 调用必须位于本地关系事务之外；超时/失败不改变已释放关系，
+     * 由持久化台账按 {@code next-retry-at} 做有界退避重试，重试沿用原 operationId。
+     */
+    @Getter
+    @Setter
+    public static class Unbind {
+
+        /**
+         * 是否启用解绑写入与自动重试（false 仅用于回滚：入口关闭，已释放关系不自动恢复）
+         */
+        private boolean enabled = true;
+
+        /**
+         * CIAM 撤销调用超时（用于文档与 Feign 读超时配置对齐）
+         */
+        private Duration revokeTimeout = Duration.ofSeconds(2);
+
+        /**
+         * 自动重试上限（达到后保留 FAILED，仍允许具备权限的人工重试）
+         */
+        private int retryMaxAttempts = 10;
+
+        /**
+         * 固定退避间隔
+         */
+        private Duration retryBackoff = Duration.ofSeconds(30);
+
+        /**
+         * 单批自动重试数量
+         */
+        private int retryBatchSize = 20;
+
+        /**
+         * 自动重试轮询间隔（毫秒）
+         */
+        private long retryPollIntervalMs = 30_000L;
+    }
+
+    /**
      * 隐私授权项目录与强校验配置。
      * <p>
      * 目录是授权事实的唯一权威（不落库、不使用 CMS）：任何条目内容变更都必须同步变更

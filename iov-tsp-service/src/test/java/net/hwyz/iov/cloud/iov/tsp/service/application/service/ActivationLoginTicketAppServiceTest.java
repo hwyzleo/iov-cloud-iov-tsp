@@ -13,10 +13,12 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationLogi
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationSession;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.BindingOperation;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.UserVehicleAuditRecord;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.UserVehicleRelation;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationLoginTicketRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationSessionRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.BindingOperationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleAuditRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleRelationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspUserVehicleProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -74,6 +76,8 @@ class ActivationLoginTicketAppServiceTest {
     @Mock
     private UserVehicleAuditRepository userVehicleAuditRepository;
     @Mock
+    private UserVehicleRelationRepository userVehicleRelationRepository;
+    @Mock
     private PlatformTransactionManager transactionManager;
 
     private TspUserVehicleProperties properties;
@@ -92,11 +96,14 @@ class ActivationLoginTicketAppServiceTest {
         lenient().when(bindingOperationRepository.findByOperationId(OPERATION_ID))
                 .thenReturn(Optional.of(BindingOperation.builder().operationId(OPERATION_ID)
                         .resultRelationId(RELATION_ID).build()));
+        lenient().when(userVehicleRelationRepository.findByRelationId(RELATION_ID))
+                .thenReturn(Optional.of(UserVehicleRelation.builder().relationId(RELATION_ID)
+                        .accountId(ACCOUNT).vin(VIN).state("ACTIVE").build()));
     }
 
     private ActivationLoginTicketAppService newService() {
         return new ActivationLoginTicketAppService(activationSessionRepository, bindingOperationRepository,
-                activationLoginTicketRepository, userVehicleAuditRepository, properties,
+                activationLoginTicketRepository, userVehicleAuditRepository, userVehicleRelationRepository, properties,
                 new TransactionTemplate(transactionManager), Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -136,6 +143,19 @@ class ActivationLoginTicketAppServiceTest {
         assertThat(saved.getBindingOperationId()).isEqualTo(OPERATION_ID);
         assertThat(saved.getIssueSeq()).isEqualTo(1);
         assertThat(saved.getState()).isEqualTo(LoginTicketState.ISSUED);
+    }
+
+    @Test
+    @DisplayName("TC021-09：关系已 RELEASED 的历史会话拒绝继续签发票据（401115）")
+    void issueRejectsReleasedRelation() {
+        when(userVehicleRelationRepository.findByRelationId(RELATION_ID))
+                .thenReturn(Optional.of(UserVehicleRelation.builder().relationId(RELATION_ID)
+                        .accountId(ACCOUNT).vin(VIN).state("RELEASED").build()));
+
+        assertTicketError(() -> appService.issue(VIN, SESSION_ID),
+                ActivationLoginTicketErrorCode.LOGIN_TICKET_UNAVAILABLE);
+        verify(activationLoginTicketRepository, never()).insert(any());
+        verify(activationLoginTicketRepository, never()).revokeIssuedBySession(anyString(), any());
     }
 
     @Test

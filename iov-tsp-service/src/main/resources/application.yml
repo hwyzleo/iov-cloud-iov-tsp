@@ -6,6 +6,18 @@ spring:
     consumer:
       group-id: tsp-vehicle-sim-status
       reactive-concurrency: 3
+  cloud:
+    openfeign:
+      client:
+        config:
+          # IOV-TSP-DSN-CR-021：CIAM 绑定撤销超时（与 tsp.user-vehicle.unbind.revoke-timeout 对齐）
+          ciamBindingRevocationClient:
+            connect-timeout: ${TSP_CIAM_UNBIND_CONNECT_TIMEOUT_MS:500}
+            read-timeout: ${TSP_CIAM_UNBIND_READ_TIMEOUT_MS:2000}
+          # 首次激活只读查询（MPT 详情受控调用，不进入列表逐行）
+          vmdVehicleActivationClient:
+            connect-timeout: ${TSP_VMD_ACTIVATION_CONNECT_TIMEOUT_MS:500}
+            read-timeout: ${TSP_VMD_ACTIVATION_READ_TIMEOUT_MS:2000}
 
 tsp:
   # VIAM 安全投影消费（IOV-TSP-DSN-CR-016）：默认关闭，旧 TSP 安全写链停用（联合切换）后启用。
@@ -82,6 +94,15 @@ tsp:
     session-idempotency:
       enabled: true
       max-key-length: 128
+    # 人工解绑与 CIAM 凭证撤销补偿（IOV-TSP-DSN-CR-021，V20）
+    # enabled=false 为回滚开关：关闭解绑入口与自动重试；已 RELEASED 关系不自动恢复。
+    unbind:
+      enabled: true
+      revoke-timeout: PT2S
+      retry-max-attempts: 10
+      retry-backoff: PT30S
+      retry-batch-size: 20
+      retry-poll-interval-ms: 30000
   tbox-management:
     # TBOX 后台运营查询（MPT，TSP-DSN-CR-009）：仅影响异常标签派生与查询/导出边界
     activation-timeout: PT30M

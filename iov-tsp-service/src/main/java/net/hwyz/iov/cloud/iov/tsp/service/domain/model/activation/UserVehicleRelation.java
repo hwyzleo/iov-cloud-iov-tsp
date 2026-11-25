@@ -68,6 +68,26 @@ public class UserVehicleRelation {
     private String factRef;
 
     /**
+     * 关系释放绝对时刻（IOV-TSP-DSN-CR-021 D021-05；ACTIVE 时为空）
+     */
+    private Instant releasedAt;
+
+    /**
+     * 解绑原因代码/摘要
+     */
+    private String releaseReason;
+
+    /**
+     * 解绑操作ID
+     */
+    private String releaseOperationId;
+
+    /**
+     * 可信 MPT 操作人
+     */
+    private String releasedBy;
+
+    /**
      * 乐观版本
      */
     private Integer rowVersion;

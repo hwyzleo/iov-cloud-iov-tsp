@@ -1,5 +1,7 @@
 package net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config;
 
+import net.hwyz.iov.cloud.iov.tsp.api.external.fallback.CiamBindingRevocationClientFallbackFactory;
+import net.hwyz.iov.cloud.iov.tsp.api.external.fallback.VmdVehicleActivationClientFallbackFactory;
 import net.hwyz.iov.cloud.iov.tsp.api.external.fallback.VmdVehiclePartBindingClientFallbackFactory;
 import net.hwyz.iov.cloud.mkt.cms.api.fallback.AgreementContentServiceFallbackFactory;
 import org.springframework.context.annotation.Bean;
@@ -35,5 +37,25 @@ public class TspUserVehicleFeignConfig {
     @Bean
     public AgreementContentServiceFallbackFactory agreementContentServiceFallbackFactory() {
         return new AgreementContentServiceFallbackFactory();
+    }
+
+    /**
+     * VMD 首次激活事实降级工厂（查询不可用即 UNKNOWN/PARTIAL，不伪造 NOT_RECORDED）
+     *
+     * @return 降级工厂
+     */
+    @Bean
+    public VmdVehicleActivationClientFallbackFactory vmdVehicleActivationClientFallbackFactory() {
+        return new VmdVehicleActivationClientFallbackFactory();
+    }
+
+    /**
+     * CIAM 绑定撤销降级工厂（不可用即台账 PENDING/FAILED，不伪造 SUCCEEDED）
+     *
+     * @return 降级工厂
+     */
+    @Bean
+    public CiamBindingRevocationClientFallbackFactory ciamBindingRevocationClientFallbackFactory() {
+        return new CiamBindingRevocationClientFallbackFactory();
     }
 }

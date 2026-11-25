@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.hwyz.iov.cloud.framework.common.exception.BusinessException;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.ActivationSessionState;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.IviLoginResultStatus;
+import net.hwyz.iov.cloud.iov.tsp.api.vo.enums.PrivacyAuthorizationState;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.request.AgreementAcceptanceRequest;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.request.ReportIviLoginResultRequest;
 import net.hwyz.iov.cloud.iov.tsp.api.vo.request.ReportPrivacyAuthorizationRequest;
@@ -19,10 +20,12 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementConse
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.PrivacyAuthorization;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.PrivacyAuthorizationCatalog;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.UserVehicleAuditRecord;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.UserVehicleRelation;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationSessionRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ConsentRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.PrivacyAuthorizationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleAuditRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleRelationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.service.PrivacyAuthorizationCatalogPolicy;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspUserVehicleProperties;
 import org.springframework.dao.DuplicateKeyException;
@@ -68,6 +71,7 @@ public class ConsentAppService {
     private final PrivacyAuthorizationRepository privacyAuthorizationRepository;
     private final ActivationSessionRepository activationSessionRepository;
     private final UserVehicleAuditRepository userVehicleAuditRepository;
+    private final UserVehicleRelationRepository userVehicleRelationRepository;
     private final ActivationLoginTicketAppService activationLoginTicketAppService;
     private final PrivacyAuthorizationCatalog privacyAuthorizationCatalog;
     private final TspUserVehicleProperties properties;
@@ -215,11 +219,15 @@ public class ConsentAppService {
                                                   ReportPrivacyAuthorizationRequest request) {
         Instant now = clock.instant();
         Instant reportedAt = parseOccurredAt(request.getOccurredAt());
-        validatePrivacyReport(request);        for (ReportPrivacyAuthorizationRequest.AuthorizationItem item : request.getItems()) {
+        validatePrivacyReport(request);
+        // IOV-TSP-DSN-CR-021 D021-08：授权必须归属当前 Account+VIN ACTIVE 关系周期；
+        // 无当前关系或关系不匹配时不接受授权生效，也不把旧周期授权继承给新关系。
+        String relationId = resolveActiveRelationId(accountId, vin);
+        for (ReportPrivacyAuthorizationRequest.AuthorizationItem item : request.getItems()) {
             String authorizationItem = item.getAuthorizationItem().trim();
             String payloadDigest = DigestUtils.sha256Hex(String.join("|", accountId, vin, authorizationItem,
                     item.getState().name(), String.valueOf(item.getVersion())));
-            var existing = privacyAuthorizationRepository.find(accountId, vin, authorizationItem);
+            var existing = privacyAuthorizationRepository.find(accountId, vin, relationId, authorizationItem);
             if (existing.isPresent()) {
                 PrivacyAuthorization current = existing.get();
                 if (request.getReportId().equals(current.getReportId())
@@ -235,6 +243,7 @@ public class ConsentAppService {
                         .authorizationId(current.getAuthorizationId())
                         .accountId(accountId)
                         .vin(vin)
+                        .relationId(relationId)
                         .authorizationItem(authorizationItem)
                         .state(item.getState())
                         .version(item.getVersion())
@@ -252,6 +261,7 @@ public class ConsentAppService {
                         .authorizationId(newId("PAZ"))
                         .accountId(accountId)
                         .vin(vin)
+                        .relationId(relationId)
                         .authorizationItem(authorizationItem)
                         .state(item.getState())
                         .version(item.getVersion())
@@ -269,6 +279,22 @@ public class ConsentAppService {
                 isCatalogEnforced() ? "PRIVACY_REPORT" : "PRIVACY_REPORT/COMPAT_MODE",
                 SOURCE_VEHICLE, null, now);
         return ReportAckVo.builder().reportId(request.getReportId()).accepted(true).build();
+    }
+
+    /**
+     * 解析当前 Account+VIN ACTIVE 关系周期ID（IOV-TSP-DSN-CR-021 D021-08）。
+     * <p>
+     * 无 ACTIVE 关系时拒绝授权生效（复用 401112：缺少可生效的关系上下文），
+     * 不新建关系、不继承旧周期授权。
+     *
+     * @param accountId 可信账号
+     * @param vin       可信车端上下文 VIN
+     * @return 当前关系ID
+     */
+    private String resolveActiveRelationId(String accountId, String vin) {
+        UserVehicleRelation relation = userVehicleRelationRepository.findActiveByAccountAndVin(accountId, vin)
+                .orElseThrow(() -> business(UserVehicleBindingErrorCode.INVALID_REQUEST));
+        return relation.getRelationId();
     }
 
     // ================= 内部实现 =================
@@ -291,6 +317,10 @@ public class ConsentAppService {
         for (ReportPrivacyAuthorizationRequest.AuthorizationItem item : request.getItems()) {
             if (item == null || isBlank(item.getAuthorizationItem()) || item.getState() == null
                     || item.getVersion() == null || item.getVersion() < 1) {
+                throw business(UserVehicleBindingErrorCode.INVALID_REQUEST);
+            }
+            if (item.getState() == PrivacyAuthorizationState.INVALIDATED) {
+                // INVALIDATED 是历史周期迁移/失效的本端状态，不接受车端作为授权结论上报
                 throw business(UserVehicleBindingErrorCode.INVALID_REQUEST);
             }
         }

@@ -93,7 +93,14 @@ class UserVehicleBindingMySqlIt {
     }
 
     private static void applyMigration(Statement statement) throws IOException, java.sql.SQLException {
-        Path migration = Path.of("src/main/resources/db/migration/V17__user_vehicle_binding.sql");
+        applyScript(statement, Path.of("src/main/resources/db/migration/V17__user_vehicle_binding.sql"));
+        // IOV-TSP-DSN-CR-021：V20 为增量 ALTER/CREATE；本隔离库为存量 schema，按列是否存在守卫只执行一次
+        if (!columnExists(statement.getConnection(), SCHEMA, "tb_user_vehicle_relation", "released_at")) {
+            applyScript(statement, Path.of("src/main/resources/db/migration/V20__user_vehicle_unbind.sql"));
+        }
+    }
+
+    private static void applyScript(Statement statement, Path migration) throws IOException, java.sql.SQLException {
         String script = Files.readString(migration, StandardCharsets.UTF_8);
         StringBuilder cleaned = new StringBuilder();
         for (String line : script.split("\n")) {
@@ -106,6 +113,14 @@ class UserVehicleBindingMySqlIt {
             if (!sql.isBlank()) {
                 statement.execute(sql);
             }
+        }
+    }
+
+    private static boolean columnExists(Connection connection, String schema, String table, String column)
+            throws java.sql.SQLException {
+        var meta = connection.getMetaData();
+        try (var columns = meta.getColumns(schema, null, table, column)) {
+            return columns.next();
         }
     }
 
@@ -265,22 +280,25 @@ class UserVehicleBindingMySqlIt {
             PrivacyAuthorizationMapper mapper = session.getMapper(PrivacyAuthorizationMapper.class);
             LocalDateTime now = LocalDateTime.parse("2026-11-20T10:00:00");
             mapper.insert(AccountVehiclePrivacyAuthorizationPo.builder()
-                    .authorizationId("PAZ-IT-1").accountId("acc-1").vin(vin).authorizationItem("LOCATION")
+                    .authorizationId("PAZ-IT-1").accountId("acc-1").vin(vin).relationId("REL-IT-1")
+                    .authorizationItem("LOCATION")
                     .state(PrivacyAuthorizationState.GRANTED.name()).version(5L).source("VEHICLE")
                     .reportId("RPT-1").payloadDigest("digest-1").reportedAt(now).receivedAt(now).build());
             // 版本更旧：不覆盖
             assertThat(mapper.updateIfNewer(AccountVehiclePrivacyAuthorizationPo.builder()
-                    .authorizationId("PAZ-IT-1").accountId("acc-1").vin(vin).authorizationItem("LOCATION")
+                    .authorizationId("PAZ-IT-1").accountId("acc-1").vin(vin).relationId("REL-IT-1")
+                    .authorizationItem("LOCATION")
                     .state(PrivacyAuthorizationState.DENIED.name()).version(3L).source("VEHICLE")
                     .reportId("RPT-2").payloadDigest("digest-2").reportedAt(now).receivedAt(now).build())).isZero();
-            assertThat(mapper.select("acc-1", vin, "LOCATION").getState())
+            assertThat(mapper.select("acc-1", vin, "REL-IT-1", "LOCATION").getState())
                     .isEqualTo(PrivacyAuthorizationState.GRANTED.name());
             // 版本更新：覆盖
             assertThat(mapper.updateIfNewer(AccountVehiclePrivacyAuthorizationPo.builder()
-                    .authorizationId("PAZ-IT-1").accountId("acc-1").vin(vin).authorizationItem("LOCATION")
+                    .authorizationId("PAZ-IT-1").accountId("acc-1").vin(vin).relationId("REL-IT-1")
+                    .authorizationItem("LOCATION")
                     .state(PrivacyAuthorizationState.DENIED.name()).version(6L).source("VEHICLE")
                     .reportId("RPT-3").payloadDigest("digest-3").reportedAt(now).receivedAt(now).build())).isEqualTo(1);
-            assertThat(mapper.select("acc-1", vin, "LOCATION").getState())
+            assertThat(mapper.select("acc-1", vin, "REL-IT-1", "LOCATION").getState())
                     .isEqualTo(PrivacyAuthorizationState.DENIED.name());
         }
     }

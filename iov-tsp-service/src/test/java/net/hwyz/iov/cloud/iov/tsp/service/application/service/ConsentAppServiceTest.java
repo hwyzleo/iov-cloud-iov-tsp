@@ -16,10 +16,12 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.ActivationSess
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.AgreementConsent;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.PrivacyAuthorization;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.PrivacyAuthorizationCatalog;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.model.activation.UserVehicleRelation;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationSessionRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ConsentRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.PrivacyAuthorizationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleAuditRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleRelationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.service.PrivacyAuthorizationCatalogPolicy;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspUserVehicleProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +67,7 @@ class ConsentAppServiceTest {
     private static final String ACCOUNT = "account-1";
     private static final String SESSION_ID = "SES-1";
     private static final String OPERATION_ID = "BOP-1";
+    private static final String RELATION_ID = "REL-1";
 
     private static final String CATALOG_VERSION = "v1";
     private static final String ITEM = "GPS_LOCATION";
@@ -84,6 +87,8 @@ class ConsentAppServiceTest {
     @Mock
     private UserVehicleAuditRepository userVehicleAuditRepository;
     @Mock
+    private UserVehicleRelationRepository userVehicleRelationRepository;
+    @Mock
     private ActivationLoginTicketAppService activationLoginTicketAppService;
     @Mock
     private PlatformTransactionManager transactionManager;
@@ -93,8 +98,12 @@ class ConsentAppServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        lenient().when(userVehicleRelationRepository.findActiveByAccountAndVin(ACCOUNT, VIN))
+                .thenReturn(Optional.of(UserVehicleRelation.builder()
+                        .relationId(RELATION_ID).accountId(ACCOUNT).vin(VIN).state("ACTIVE").build()));
         consentAppService = new ConsentAppService(consentRepository, privacyAuthorizationRepository,
-                activationSessionRepository, userVehicleAuditRepository, activationLoginTicketAppService,
+                activationSessionRepository, userVehicleAuditRepository, userVehicleRelationRepository,
+                activationLoginTicketAppService,
                 CATALOG, new TspUserVehicleProperties(), new TransactionTemplate(transactionManager),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -204,7 +213,7 @@ class ConsentAppServiceTest {
     @Test
     @DisplayName("授权旧版本/重复回执：不覆盖新状态")
     void privacyOlderVersionIgnored() {
-        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, ITEM))
+        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, RELATION_ID, ITEM))
                 .thenReturn(Optional.of(PrivacyAuthorization.builder()
                         .authorizationId("PAZ-1").accountId(ACCOUNT).vin(VIN).authorizationItem(ITEM)
                         .state(PrivacyAuthorizationState.GRANTED).version(5L).reportId("RPT-OLD")
@@ -221,20 +230,50 @@ class ConsentAppServiceTest {
     @Test
     @DisplayName("关闭弹框不等于授权：NOT_GRANTED 原样记录")
     void privacyNotGrantedIsNotGranted() {
-        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, ITEM)).thenReturn(Optional.empty());
+        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, RELATION_ID, ITEM)).thenReturn(Optional.empty());
 
         consentAppService.reportPrivacyAuthorization(ACCOUNT, VIN, privacyRequest("RPT-5", CATALOG_VERSION,
                 ReportPrivacyAuthorizationRequest.AuthorizationItem.builder().authorizationItem(ITEM)
                         .state(PrivacyAuthorizationState.NOT_GRANTED).version(1L).build()));
 
         verify(privacyAuthorizationRepository).insert(org.mockito.ArgumentMatchers.argThat(
-                item -> item.getState() == PrivacyAuthorizationState.NOT_GRANTED));
+                item -> item.getState() == PrivacyAuthorizationState.NOT_GRANTED
+                        && RELATION_ID.equals(item.getRelationId())));
+    }
+
+    @Test
+    @DisplayName("INVALIDATED 不接受车端上报：401112 且零写入")
+    void privacyInvalidatedRejected() {
+        assertThatThrownBy(() -> consentAppService.reportPrivacyAuthorization(ACCOUNT, VIN,
+                privacyRequest("RPT-22", CATALOG_VERSION,
+                        ReportPrivacyAuthorizationRequest.AuthorizationItem.builder().authorizationItem(ITEM)
+                                .state(PrivacyAuthorizationState.INVALIDATED).version(1L).build())))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
+                        .isEqualTo(UserVehicleBindingErrorCode.INVALID_REQUEST.getCode()));
+        verify(privacyAuthorizationRepository, never()).insert(any());
+        verify(privacyAuthorizationRepository, never()).updateIfNewer(any());
+    }
+
+    @Test
+    @DisplayName("无当前 ACTIVE 关系：拒绝授权生效且零写入（IOV-TSP-DSN-CR-021 D021-08）")
+    void privacyWithoutActiveRelationRejected() {
+        when(userVehicleRelationRepository.findActiveByAccountAndVin(ACCOUNT, VIN)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> consentAppService.reportPrivacyAuthorization(ACCOUNT, VIN,
+                privacyRequest("RPT-21", CATALOG_VERSION, item(ITEM, 1L))))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
+                        .isEqualTo(UserVehicleBindingErrorCode.INVALID_REQUEST.getCode()));
+        verify(privacyAuthorizationRepository, never()).find(anyString(), anyString(), anyString(), anyString());
+        verify(privacyAuthorizationRepository, never()).insert(any());
+        verify(privacyAuthorizationRepository, never()).updateIfNewer(any());
     }
 
     @Test
     @DisplayName("同回执ID不同内容：冲突，不静默覆盖")
     void privacyReportConflict() {
-        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, ITEM))
+        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, RELATION_ID, ITEM))
                 .thenReturn(Optional.of(PrivacyAuthorization.builder()
                         .authorizationId("PAZ-1").accountId(ACCOUNT).vin(VIN).authorizationItem(ITEM)
                         .state(PrivacyAuthorizationState.GRANTED).version(1L).reportId("RPT-6")
@@ -274,7 +313,7 @@ class ConsentAppServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getErrorCode().getCode())
                         .isEqualTo(UserVehicleBindingErrorCode.CATALOG_VERSION_MISMATCH.getCode()));
-        verify(privacyAuthorizationRepository, never()).find(anyString(), anyString(), anyString());
+        verify(privacyAuthorizationRepository, never()).find(anyString(), anyString(), anyString(), anyString());
         verify(privacyAuthorizationRepository, never()).insert(any());
         verify(privacyAuthorizationRepository, never()).updateIfNewer(any());
         verify(userVehicleAuditRepository, never()).insert(any());
@@ -301,8 +340,8 @@ class ConsentAppServiceTest {
         props.getPrivacyAuthorization().setEnabled(enabled);
         props.getPrivacyAuthorization().setEnforceCatalog(enforceCatalog);
         return new ConsentAppService(consentRepository, privacyAuthorizationRepository, activationSessionRepository,
-                userVehicleAuditRepository, activationLoginTicketAppService, CATALOG, props,
-                new TransactionTemplate(transactionManager), Clock.fixed(NOW, ZoneOffset.UTC));
+                userVehicleAuditRepository, userVehicleRelationRepository, activationLoginTicketAppService, CATALOG,
+                props, new TransactionTemplate(transactionManager), Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -407,7 +446,7 @@ class ConsentAppServiceTest {
     @Test
     @DisplayName("决策序号大于已存：更新为最新状态")
     void privacyNewerVersionUpdates() {
-        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, ITEM))
+        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, RELATION_ID, ITEM))
                 .thenReturn(Optional.of(PrivacyAuthorization.builder()
                         .authorizationId("PAZ-1").accountId(ACCOUNT).vin(VIN).authorizationItem(ITEM)
                         .state(PrivacyAuthorizationState.GRANTED).version(3L).reportId("RPT-OLD")
@@ -424,7 +463,7 @@ class ConsentAppServiceTest {
     @Test
     @DisplayName("决策序号等于已存：幂等跳过且不报错")
     void privacyEqualVersionIsIdempotent() {
-        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, ITEM))
+        when(privacyAuthorizationRepository.find(ACCOUNT, VIN, RELATION_ID, ITEM))
                 .thenReturn(Optional.of(PrivacyAuthorization.builder()
                         .authorizationId("PAZ-1").accountId(ACCOUNT).vin(VIN).authorizationItem(ITEM)
                         .state(PrivacyAuthorizationState.GRANTED).version(3L).reportId("RPT-OLD")

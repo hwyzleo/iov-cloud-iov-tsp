@@ -37,6 +37,17 @@ public class UserVehicleRelationPo extends BasePo {
 
     private LocalDateTime boundAt;
 
+    /**
+     * 关系释放绝对时刻（UTC，IOV-TSP-DSN-CR-021 D021-05）
+     */
+    private LocalDateTime releasedAt;
+
+    private String releaseReason;
+
+    private String releaseOperationId;
+
+    private String releasedBy;
+
     private String sourceOperationId;
 
     private String ruleVersion;

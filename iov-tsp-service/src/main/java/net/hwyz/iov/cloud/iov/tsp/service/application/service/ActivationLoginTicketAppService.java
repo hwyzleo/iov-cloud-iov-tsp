@@ -20,6 +20,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationLoginTicke
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.ActivationSessionRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.BindingOperationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleAuditRepository;
+import net.hwyz.iov.cloud.iov.tsp.service.domain.repository.UserVehicleRelationRepository;
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.config.TspUserVehicleProperties;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -54,6 +55,7 @@ public class ActivationLoginTicketAppService {
     private final BindingOperationRepository bindingOperationRepository;
     private final ActivationLoginTicketRepository activationLoginTicketRepository;
     private final UserVehicleAuditRepository userVehicleAuditRepository;
+    private final UserVehicleRelationRepository userVehicleRelationRepository;
     private final TspUserVehicleProperties properties;
     private final TransactionTemplate transactionTemplate;
     private final Clock clock;
@@ -89,6 +91,16 @@ public class ActivationLoginTicketAppService {
         }
         validateIssuable(session, now);
 
+        // IOV-TSP-DSN-CR-021 D021-06：解绑后旧会话保持 BOUND 历史，但不得继续签发。
+        // 关系敏感门禁：来源关系必须仍为 ACTIVE，不能只信会话 BOUND。
+        String relationId = resolveRelationId(session.getBindingOperationId());
+        if (relationId == null || !isRelationActive(relationId)) {
+            audit("TICKET_REJECTED", ticketRefForSession(sessionId), vin, null,
+                    session.getState() == null ? null : session.getState().name(), "REJECTED", "VEHICLE",
+                    "RELATION_RELEASED", null, now);
+            throw business(ActivationLoginTicketErrorCode.LOGIN_TICKET_UNAVAILABLE);
+        }
+
         int nextSeq = activationLoginTicketRepository.maxIssueSeqBySession(sessionId) + 1;
         if (nextSeq > properties.getLoginTicket().getPerSessionMaxIssue()) {
             audit("TICKET_REJECTED", ticketRefForSession(sessionId), vin, null, null, "REJECTED",
@@ -100,7 +112,6 @@ public class ActivationLoginTicketAppService {
         String ticket = newTicketValue();
         String ticketHash = DigestUtils.sha256Hex(ticket);
         String ticketId = newId("TKT");
-        String relationId = resolveRelationId(session.getBindingOperationId());
         Instant expiresAt = now.plus(properties.getLoginTicket().getTtl());
         ActivationLoginTicket entity = ActivationLoginTicket.builder()
                 .ticketId(ticketId)
@@ -260,6 +271,18 @@ public class ActivationLoginTicketAppService {
         return bindingOperationRepository.findByOperationId(bindingOperationId)
                 .map(BindingOperation::getResultRelationId)
                 .orElse(null);
+    }
+
+    /**
+     * 关系是否仍为 ACTIVE（IOV-TSP-DSN-CR-021 D021-06）
+     *
+     * @param relationId 关系ID
+     * @return 当前有效返回 true
+     */
+    private boolean isRelationActive(String relationId) {
+        return userVehicleRelationRepository.findByRelationId(relationId)
+                .map(relation -> "ACTIVE".equals(relation.getState()))
+                .orElse(false);
     }
 
     private void acquireIssueQuota(String sessionId, Instant now) {

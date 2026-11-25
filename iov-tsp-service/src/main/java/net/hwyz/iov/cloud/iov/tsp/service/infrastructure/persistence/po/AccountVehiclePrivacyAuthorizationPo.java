@@ -30,6 +30,11 @@ public class AccountVehiclePrivacyAuthorizationPo {
 
     private String vin;
 
+    /**
+     * 授权来源关系周期ID（IOV-TSP-DSN-CR-021）
+     */
+    private String relationId;
+
     private String authorizationItem;
 
     private String state;

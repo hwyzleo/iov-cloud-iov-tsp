@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 /**
- * 隐私授权仓储实现（按来源版本收敛，不用接收时间覆盖）。
+ * 隐私授权仓储实现（按来源版本收敛，不用接收时间覆盖；关系周期隔离）。
  *
  * @author hwyz_leo
  */
@@ -23,13 +23,15 @@ public class PrivacyAuthorizationRepositoryImpl implements PrivacyAuthorizationR
     private final PrivacyAuthorizationMapper privacyAuthorizationMapper;
 
     @Override
-    public Optional<PrivacyAuthorization> find(String accountId, String vin, String authorizationItem) {
-        return Optional.ofNullable(privacyAuthorizationMapper.select(accountId, vin, authorizationItem))
+    public Optional<PrivacyAuthorization> find(String accountId, String vin, String relationId,
+                                               String authorizationItem) {
+        return Optional.ofNullable(privacyAuthorizationMapper.select(accountId, vin, relationId, authorizationItem))
                 .map(po -> PrivacyAuthorization.builder()
                         .id(po.getId())
                         .authorizationId(po.getAuthorizationId())
                         .accountId(po.getAccountId())
                         .vin(po.getVin())
+                        .relationId(po.getRelationId())
                         .authorizationItem(po.getAuthorizationItem())
                         .state(po.getState() == null ? null : PrivacyAuthorizationState.valueOf(po.getState()))
                         .version(po.getVersion())
@@ -58,6 +60,7 @@ public class PrivacyAuthorizationRepositoryImpl implements PrivacyAuthorizationR
                 .authorizationId(authorization.getAuthorizationId())
                 .accountId(authorization.getAccountId())
                 .vin(authorization.getVin())
+                .relationId(authorization.getRelationId())
                 .authorizationItem(authorization.getAuthorizationItem())
                 .state(authorization.getState() == null ? null : authorization.getState().name())
                 .version(authorization.getVersion())

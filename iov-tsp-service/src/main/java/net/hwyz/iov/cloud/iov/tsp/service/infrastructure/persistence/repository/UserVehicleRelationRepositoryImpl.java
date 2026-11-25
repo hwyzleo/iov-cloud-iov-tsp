@@ -8,6 +8,7 @@ import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.mapper.User
 import net.hwyz.iov.cloud.iov.tsp.service.infrastructure.persistence.po.UserVehicleRelationPo;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -49,6 +50,29 @@ public class UserVehicleRelationRepositoryImpl implements UserVehicleRelationRep
                 .map(this::toEntity);
     }
 
+    @Override
+    public Optional<UserVehicleRelation> findByRelationId(String relationId) {
+        return Optional.ofNullable(userVehicleRelationMapper.selectByRelationId(relationId)).map(this::toEntity);
+    }
+
+    @Override
+    public Optional<UserVehicleRelation> lockByRelationId(String relationId) {
+        return Optional.ofNullable(userVehicleRelationMapper.lockByRelationId(relationId)).map(this::toEntity);
+    }
+
+    @Override
+    public Optional<UserVehicleRelation> findLatestReleasedByVin(String vin) {
+        return Optional.ofNullable(userVehicleRelationMapper.selectLatestReleasedByVin(vin)).map(this::toEntity);
+    }
+
+    @Override
+    public boolean release(String relationId, int expectedRowVersion, Instant releasedAt, String reason,
+                           String operationId, String releasedBy, Instant now) {
+        return userVehicleRelationMapper.release(relationId, expectedRowVersion,
+                UtcTime.toLocalDateTime(releasedAt), reason, operationId, releasedBy,
+                UtcTime.toLocalDateTime(now)) > 0;
+    }
+
     private UserVehicleRelation toEntity(UserVehicleRelationPo po) {
         return UserVehicleRelation.builder()
                 .id(po.getId())
@@ -61,6 +85,10 @@ public class UserVehicleRelationRepositoryImpl implements UserVehicleRelationRep
                 .sourceOperationId(po.getSourceOperationId())
                 .ruleVersion(po.getRuleVersion())
                 .factRef(po.getFactRef())
+                .releasedAt(UtcTime.toInstant(po.getReleasedAt()))
+                .releaseReason(po.getReleaseReason())
+                .releaseOperationId(po.getReleaseOperationId())
+                .releasedBy(po.getReleasedBy())
                 .rowVersion(po.getRowVersion())
                 .build();
     }

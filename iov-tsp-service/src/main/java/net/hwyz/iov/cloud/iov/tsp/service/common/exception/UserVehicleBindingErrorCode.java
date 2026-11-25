@@ -94,7 +94,17 @@ public enum UserVehicleBindingErrorCode implements ErrorCode {
     /**
      * 上报目录版本缺失或与当前目录版本不一致（整批拒绝，无任何写入；车端可重试：重新拉目录后重报）
      */
-    CATALOG_VERSION_MISMATCH("401119", "目录版本不一致");
+    CATALOG_VERSION_MISMATCH("401119", "目录版本不一致"),
+
+    /**
+     * 指定 relationId 不存在（MPT 人工解绑；IOV-TSP-DSN-CR-021 D021-04）
+     */
+    USER_VEHICLE_RELATION_NOT_FOUND("401120", "用户车辆关系不存在"),
+
+    /**
+     * 关系非 ACTIVE、预期 rowVersion 过期或并发状态冲突（IOV-TSP-DSN-CR-021 D021-04）
+     */
+    USER_VEHICLE_RELATION_STATE_CONFLICT("401121", "用户车辆关系状态已变更");
 
     private final String code;
     private final String message;
